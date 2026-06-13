@@ -12,9 +12,10 @@
 
 import { chromium } from "playwright";
 
-const BASE_URL   = process.env.FOUNDRY_URL       ?? "http://localhost:30000";
-const ADMIN_KEY  = process.env.FOUNDRY_ADMIN_KEY ?? "admin";
-const TIMEOUT_MS = parseInt(process.env.QUENCH_TIMEOUT_MS ?? "300000", 10); // 5 min
+const BASE_URL    = process.env.FOUNDRY_URL        ?? "http://localhost:30000";
+const ADMIN_KEY   = process.env.FOUNDRY_ADMIN_KEY  ?? "admin";
+const TIMEOUT_MS  = parseInt(process.env.QUENCH_TIMEOUT_MS ?? "300000", 10); // 5 min
+const KEEP_WORLD  = process.env.TRAVELER_KEEP_WORLD === "true";
 
 // ---------------------------------------------------------------------------
 
@@ -60,7 +61,13 @@ async function main() {
     await page.waitForSelector("#board", { timeout: TIMEOUT_MS });
     await page.waitForTimeout(3_000); // allow modules to finish their init hooks
 
-    // ── 4. Ensure Quench is available ───────────────────────────────────
+    // ── 4a. Inject inspect-mode flag so fixtures skip teardown ──────────
+    if (KEEP_WORLD) {
+      console.log("[run-quench] TRAVELER_KEEP_WORLD=true — test artifacts will NOT be deleted.");
+      await page.evaluate(() => { window.TRAVELER_KEEP_WORLD = true; });
+    }
+
+    // ── 4b. Ensure Quench is available ──────────────────────────────────
     const quenchAvailable = await page.evaluate(() => typeof window.quench !== "undefined");
     if (!quenchAvailable) {
       throw new Error(
@@ -109,6 +116,14 @@ async function main() {
     }
 
     console.log("[run-quench] All tests passed.");
+    if (KEEP_WORLD) {
+      console.log("\n──────────────────────────────────────────");
+      console.log("INSPECT MODE — container still running.");
+      console.log(`Open ${BASE_URL} in a browser and log in as GM.`);
+      console.log("Test scenes, actors, notes and tokens are preserved.");
+      console.log("Run `npm run world:clean` when you are done.");
+      console.log("──────────────────────────────────────────\n");
+    }
     process.exit(0);
 
   } catch (err) {

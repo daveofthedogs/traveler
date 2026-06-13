@@ -9,11 +9,17 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "test:integration": "node scripts/run-quench.js",
-    "foundry:wait": "node scripts/foundry-wait.js"
+    "test:inspect": "cross-env TRAVELER_KEEP_WORLD=true node scripts/run-quench.js",
+    "foundry:wait": "node scripts/foundry-wait.js",
+    "foundry:up": "docker-compose -f docker-compose.test.yml up -d",
+    "foundry:down": "docker-compose -f docker-compose.test.yml down",
+    "foundry:down:clean": "docker-compose -f docker-compose.test.yml down -v",
+    "world:clean": "node scripts/world-clean.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
     "@vitest/coverage-v8": "^4.1.8",
+    "cross-env": "^10.1.0",
     "playwright": "^1.44.0",
     "vitest": "^4.1.8"
   }

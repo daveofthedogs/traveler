@@ -140,7 +140,18 @@ export const SceneFixture = {
       cliffRegion,
       checkRegion,
       token,
+      /**
+       * Delete all created documents.
+       * Skipped when `window.TRAVELER_KEEP_WORLD === true` so the GM can
+       * inspect the live world after a TRAVELER_KEEP_WORLD=true test run.
+       */
       teardown: async () => {
+        if (globalThis.TRAVELER_KEEP_WORLD) {
+          console.log(
+            `[Traveler fixtures] Keeping scene "${scene?.name}" (TRAVELER_KEEP_WORLD=true).`
+          );
+          return;
+        }
         try { await scene?.delete(); } catch {}
       }
     };
