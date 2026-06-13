@@ -8,16 +8,16 @@ export class IndyRouteCurrenciesApp extends foundry.applications.api.HandlebarsA
   };
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "indy-route-currencies",
-    window: { title: "Indy Route: Currency Conversions", resizable: true },
+    id: "traveler-currencies",
+    window: { title: "Traveler: Currency Conversions", resizable: true },
     position: { width: 520, height: 520 },
-    classes: ["indy-route", "indy-route-currencies"]
+    classes: ["traveler", "traveler-currencies"]
   }, { inplace: false });
 
   static show() {
     this._instance ??= new IndyRouteCurrenciesApp();
     this._instance.currencies = this._instance._loadCurrencies();
-    return this._instance.render(true);
+    return this._instance.render({ force: true });
   }
 
   constructor(options = {}) {
@@ -100,13 +100,13 @@ export class IndyRouteCurrenciesApp extends foundry.applications.api.HandlebarsA
   _addCurrency() {
     const next = { key: "", label: "", conversion: 1 };
     this.currencies = [...this.currencies, next];
-    this.render(true);
+    this.render({ force: true });
   }
 
   _deleteCurrency(index) {
     if (!Number.isFinite(index)) return;
     this.currencies = this.currencies.filter((_, idx) => idx !== index);
-    this.render(true);
+    this.render({ force: true });
   }
 
   _readForm() {

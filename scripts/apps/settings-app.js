@@ -10,10 +10,10 @@ export class IndyRouteSettingsBase extends foundry.applications.api.HandlebarsAp
   };
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "indy-route-settings",
-    window: { title: "Indy Route Tools: Settings", resizable: true },
+    id: "traveler-settings",
+    window: { title: "Traveler: Settings", resizable: true },
     position: { width: 440, height: 494 },
-    classes: ["indy-route", "indy-route-settings"]
+    classes: ["traveler", "traveler-settings"]
   }, { inplace: false });
 
   constructor(options = {}) {
@@ -244,10 +244,10 @@ export class IndyRouteSettingsApp extends IndyRouteSettingsBase {}
 
 export class IndyRouteEditor extends IndyRouteSettingsBase {
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "indy-route-editor",
+    id: "traveler-editor",
     window: { title: "Edit Route" },
     position: { width: 440, height: 494 },
-    classes: ["indy-route", "indy-route-editor"]
+    classes: ["traveler", "traveler-editor"]
   }, { inplace: false });
 
   constructor(route, callbacks = {}) {

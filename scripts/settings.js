@@ -1,4 +1,4 @@
-export const MODULE_ID = "indy-route";
+export const MODULE_ID = "traveler";
 
 export const DEFAULTS = {
   lineColor: "#d61f1f",

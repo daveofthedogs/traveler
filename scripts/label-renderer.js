@@ -348,28 +348,28 @@ export class IndyRouteLabelRenderer {
 
   async drawLabel(container, path, settings, labelText, options = {}) {
     if (!settings?.showLabel) {
-      const sprite = container?.indyRouteLabelSprite;
+      const sprite = container?.travelerLabelSprite;
       if (sprite) {
         const oldTexture = sprite.texture;
         try { sprite.destroy({ children: true }); } catch {}
         if (oldTexture && oldTexture !== PIXI.Texture.WHITE) {
           try { oldTexture.destroy(true); } catch {}
         }
-        container.indyRouteLabelSprite = null;
+        container.travelerLabelSprite = null;
       }
       return;
     }
     const forceHighQuality = options.forceHighQuality !== undefined ? options.forceHighQuality : true;
     if (container) {
-      container.indyRouteLabelLastArgs = {
+      container.travelerLabelLastArgs = {
         path,
         settings,
         labelText,
         options: { ...options, forceHighQuality }
       };
     }
-    if (container?.indyRouteLabelInFlight) {
-      container.indyRouteLabelPending = container.indyRouteLabelLastArgs;
+    if (container?.travelerLabelInFlight) {
+      container.travelerLabelPending = container.travelerLabelLastArgs;
       return;
     }
     // try {
@@ -380,7 +380,7 @@ export class IndyRouteLabelRenderer {
     //     highQuality: !!forceHighQuality
     //   });
     // } catch {}
-    if (container) container.indyRouteLabelInFlight = true;
+    if (container) container.travelerLabelInFlight = true;
     try {
       const text = (labelText ?? "").toString().trim();
       if (!text) return;
@@ -407,7 +407,7 @@ export class IndyRouteLabelRenderer {
       dropShadowDistance: 2
     });
     const clearLabelSprite = () => {
-        const sprite = container?.indyRouteLabelSprite;
+        const sprite = container?.travelerLabelSprite;
         if (!sprite) return;
         
         const oldTexture = sprite.texture;
@@ -454,7 +454,7 @@ export class IndyRouteLabelRenderer {
       const labelLineText = showArrow
         ? (arrowGlyph === arrowRight ? `${text} ${arrowGlyph}` : `${arrowGlyph} ${text}`)
         : text;
-      let labelTextSprite = container?.indyRouteLabelSprite;
+      let labelTextSprite = container?.travelerLabelSprite;
       if (labelTextSprite && !(labelTextSprite instanceof PIXI.Text)) {
         clearLabelSprite();
         labelTextSprite = null;
@@ -462,7 +462,7 @@ export class IndyRouteLabelRenderer {
       if (!labelTextSprite) {
         labelTextSprite = new PIXI.Text(labelLineText, style);
         container.addChild(labelTextSprite);
-        container.indyRouteLabelSprite = labelTextSprite;
+        container.travelerLabelSprite = labelTextSprite;
       } else {
         labelTextSprite.style = style;
         labelTextSprite.text = labelLineText;
@@ -596,7 +596,7 @@ export class IndyRouteLabelRenderer {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
 
-    const pathId = `indy-route-label-${foundry.utils.randomID()}`;
+    const pathId = `traveler-label-${foundry.utils.randomID()}`;
     const fill = settings.labelColor ?? "#ffffff";
     const stroke = "#000000";
     const strokeWidth = Math.max(1, Math.round(fontSize / 8)) * renderScale;
@@ -620,10 +620,10 @@ export class IndyRouteLabelRenderer {
     const shadowDx = 1 * renderScale;
     const shadowDy = 1 * renderScale;
     const shadowBlur = 0.6 * renderScale;
-    const updateToken = (container.indyRouteLabelUpdateToken ?? 0) + 1;
-    container.indyRouteLabelUpdateToken = updateToken;
+    const updateToken = (container.travelerLabelUpdateToken ?? 0) + 1;
+    container.travelerLabelUpdateToken = updateToken;
     const fontFaceCss = await this.buildFontFaceCss(style.fontFamily);
-    if (container.indyRouteLabelUpdateToken !== updateToken) return;
+    if (container.travelerLabelUpdateToken !== updateToken) return;
     const fontFaceBlock = fontFaceCss ? `<style>${fontFaceCss}</style>` : "";
     const svg = `<?xml version="1.0" encoding="UTF-8"?>` +
       `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
@@ -640,27 +640,27 @@ export class IndyRouteLabelRenderer {
     const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     const basePTexture = new PIXI.BaseTexture(svgUrl);
     const texture = new PIXI.Texture(basePTexture);
-    if (container.indyRouteLabelUpdateToken !== updateToken) {
+    if (container.travelerLabelUpdateToken !== updateToken) {
       try { texture.destroy(true); } catch {}
       return;
     }
-    let sprite = container.indyRouteLabelSprite;
+    let sprite = container.travelerLabelSprite;
     if (!sprite || !(sprite instanceof PIXI.Sprite)) {
       clearLabelSprite();
       sprite = new PIXI.Sprite(PIXI.Texture.WHITE);
       sprite.visible = false;
       container.addChild(sprite);
-      container.indyRouteLabelSprite = sprite;
+      container.travelerLabelSprite = sprite;
     }
     const oldTexture = sprite.texture;
     sprite.alpha = initialAlpha;
     const applyTexture = () => {
-        if (container.indyRouteLabelUpdateToken !== updateToken) {
+        if (container.travelerLabelUpdateToken !== updateToken) {
             texture.destroy(true);
             return;
         }
 
-        const sprite = container.indyRouteLabelSprite;
+        const sprite = container.travelerLabelSprite;
         const oldTexture = sprite.texture;
 
         sprite.texture = texture;
@@ -720,10 +720,10 @@ export class IndyRouteLabelRenderer {
     cleanupOld();
     return { display: sprite, length: spanText };
     } finally {
-      if (container) container.indyRouteLabelInFlight = false;
-      if (container?.indyRouteLabelPending) {
-        const pending = container.indyRouteLabelPending;
-        container.indyRouteLabelPending = null;
+      if (container) container.travelerLabelInFlight = false;
+      if (container?.travelerLabelPending) {
+        const pending = container.travelerLabelPending;
+        container.travelerLabelPending = null;
         //console.log("IndyRoute label: processing pending label update");
         setTimeout(() => {
           this.drawLabel(

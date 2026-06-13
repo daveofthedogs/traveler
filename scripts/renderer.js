@@ -10,8 +10,8 @@ const labelRenderer = new IndyRouteLabelRenderer();
 
 export const IndyRouteRenderer = {
   ensureRoot() {
-    window.__indyRouteBroadcast ??= { containers: [], preview: null, previewRouteId: null };
-    return window.__indyRouteBroadcast;
+    window.__travelerBroadcast ??= { containers: [], preview: null, previewRouteId: null };
+    return window.__travelerBroadcast;
   },
 
   clearLocal() {
@@ -77,12 +77,12 @@ export const IndyRouteRenderer = {
     const container = dot?.parent;
     if (!settings.showDot) {
       dot?.clear?.();
-      if (container?.indyRouteTokenSprite) container.indyRouteTokenSprite.visible = false;
+      if (container?.travelerTokenSprite) container.travelerTokenSprite.visible = false;
       return;
     }
     this.ensureTokenSprite(container, settings);
-    if (container?.indyRouteTokenState === "ready" && container.indyRouteTokenSprite) {
-      const sprite = container.indyRouteTokenSprite;
+    if (container?.travelerTokenState === "ready" && container.travelerTokenSprite) {
+      const sprite = container.travelerTokenSprite;
       sprite.visible = true;
       sprite.position.set(x, y);
       const scaleMult = Number.isFinite(settings.dotTokenScale) ? settings.dotTokenScale : 1;
@@ -103,7 +103,7 @@ export const IndyRouteRenderer = {
       dot?.clear?.();
       return;
     }
-    if (settings.dotTokenUuid && container?.indyRouteTokenState !== "failed") {
+    if (settings.dotTokenUuid && container?.travelerTokenState !== "failed") {
       dot?.clear?.();
       return;
     }
@@ -166,23 +166,23 @@ export const IndyRouteRenderer = {
 
   ensureTokenSprite(container, settings) {
     if (!container || !settings.dotTokenUuid) return;
-    if (container.indyRouteTokenState) return;
-    container.indyRouteTokenState = "loading";
+    if (container.travelerTokenState) return;
+    container.travelerTokenState = "loading";
     this.resolveTokenTexture(settings.dotTokenUuid)
       .then((texture) => {
         if (!texture || container.destroyed) {
-          container.indyRouteTokenState = "failed";
+          container.travelerTokenState = "failed";
           return;
         }
         const sprite = new PIXI.Sprite(texture);
         sprite.anchor.set(0.5);
         sprite.zIndex = 3;
         container.addChild(sprite);
-        container.indyRouteTokenSprite = sprite;
-        container.indyRouteTokenState = "ready";
+        container.travelerTokenSprite = sprite;
+        container.travelerTokenState = "ready";
       })
       .catch(() => {
-        container.indyRouteTokenState = "failed";
+        container.travelerTokenState = "failed";
       });
   },
 
@@ -201,8 +201,8 @@ export const IndyRouteRenderer = {
         doc?.img ||
         null;
       if (src) {
-        const loader = foundry?.canvas?.loadTexture ?? loadTexture;
-        texture = await loader(src);
+        // v14: foundry.canvas.loadTexture is the canonical path; global loadTexture removed.
+        texture = await foundry.canvas.loadTexture(src);
       }
     } catch {}
 
@@ -349,15 +349,18 @@ export const IndyRouteRenderer = {
       } else if (canvas?.fog?.clear) {
         canvas.fog.clear();
       }
-      canvas?.fog?.refresh?.();
-      canvas?.sight?.refresh?.();
-      return;
-    }
-    if (!exploration || snapshot.explored == null) return;
-    const explored = snapshot.explored;
-    await this.updateFogExploration(exploration, explored);
     canvas?.fog?.refresh?.();
+    // v14 renamed canvas.sight → canvas.visibility; call both for cross-version compat.
+    canvas?.visibility?.refresh?.();
     canvas?.sight?.refresh?.();
+    return;
+  }
+  if (!exploration || snapshot.explored == null) return;
+  const explored = snapshot.explored;
+  await this.updateFogExploration(exploration, explored);
+  canvas?.fog?.refresh?.();
+  canvas?.visibility?.refresh?.();
+  canvas?.sight?.refresh?.();
   },
 
   moveTokenMarker(tokenDoc, x, y) {
@@ -816,15 +819,29 @@ export const IndyRouteRenderer = {
 
     if (!extractCanvas) return null;
     let textureSrc = null;
-    const folder = "indy-route";
-    const fileName = `indy-route-${foundry.utils.randomID()}.png`;
+    const folder = "traveler";
+    const fileName = `traveler-${foundry.utils.randomID()}.png`;
     try {
-      const picker = foundry?.applications?.apps?.FilePicker?.implementation ?? FilePicker;
-      if (foundry.utils?.ImageHelper?.uploadBase64) {
-        await picker.createDirectory("data", folder).catch(() => {});
+      // v14: FilePicker moved under foundry.applications.apps; global removed.
+      const picker = foundry?.applications?.apps?.FilePicker?.implementation
+        ?? foundry?.applications?.apps?.FilePicker
+        ?? globalThis.FilePicker;
+      // v14: ImageHelper moved from foundry.utils to foundry.helpers.media.
+      // v14 uploadBase64 signature: (base64, fileName, filePath, options?)
+      // v13 uploadBase64 signature: (base64, { folder, filename })
+      const ImageHelper = foundry.helpers?.media?.ImageHelper ?? foundry.utils?.ImageHelper;
+      if (ImageHelper?.uploadBase64) {
+        await picker?.createDirectory("data", folder).catch(() => {});
         const dataUrl = extractCanvas.toDataURL("image/png");
-        const upload = await foundry.utils.ImageHelper.uploadBase64(dataUrl, { folder, filename: fileName });
-        textureSrc = upload?.path ?? upload ?? textureSrc;
+        let upload;
+        if (foundry.helpers?.media?.ImageHelper) {
+          // v14 path
+          upload = await foundry.helpers.media.ImageHelper.uploadBase64(dataUrl, fileName, folder);
+        } else {
+          // v13 path
+          upload = await foundry.utils.ImageHelper.uploadBase64(dataUrl, { folder, filename: fileName });
+        }
+        textureSrc = upload?.path ?? (typeof upload === "string" ? upload : null) ?? textureSrc;
       } else if (picker?.upload) {
         await picker.createDirectory("data", folder).catch(() => {});
         const blob = await new Promise((resolve) => extractCanvas.toBlob(resolve, "image/png"));

@@ -8,16 +8,16 @@ export class IndyRouteTravelModesApp extends foundry.applications.api.Handlebars
   };
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "indy-route-travel-modes",
-    window: { title: "Indy Route: Travel Modes", resizable: true },
+    id: "traveler-travel-modes",
+    window: { title: "Traveler: Travel Modes", resizable: true },
     position: { width: 640, height: 520 },
-    classes: ["indy-route", "indy-route-travel-modes"]
+    classes: ["traveler", "traveler-travel-modes"]
   }, { inplace: false });
 
   static show() {
     this._instance ??= new IndyRouteTravelModesApp();
     this._instance.modes = this._instance._loadModes();
-    return this._instance.render(true);
+    return this._instance.render({ force: true });
   }
 
   constructor(options = {}) {
@@ -55,13 +55,13 @@ export class IndyRouteTravelModesApp extends foundry.applications.api.Handlebars
       CONFIG?.[systemId] ??
       null;
     const currencies = sysConfig?.currencies;
-    if (window?.INDY_ROUTE_DEBUG) {
+    if (window?.TRAVELER_DEBUG) {
       console.info("[IndyRoute] currency lookup", { systemId, sysConfig, currencies });
     }
     if (!currencies || typeof currencies !== "object") return "gp";
     if (currencies.gp) {
       const label = currencies.gp.abbreviation ?? currencies.gp.label ?? "gp";
-      if (window?.INDY_ROUTE_DEBUG) {
+      if (window?.TRAVELER_DEBUG) {
         console.info("[IndyRoute] currency label", { label });
       }
       return label;
@@ -76,7 +76,7 @@ export class IndyRouteTravelModesApp extends foundry.applications.api.Handlebars
       .sort((a, b) => a.conversion - b.conversion);
     const base = entries.find((entry) => entry.conversion === 1) ?? entries[0];
     const label = base?.label ?? "currency";
-    if (window?.INDY_ROUTE_DEBUG) {
+    if (window?.TRAVELER_DEBUG) {
       console.info("[IndyRoute] currency label", { label, entries });
     }
     return label;
@@ -130,13 +130,13 @@ export class IndyRouteTravelModesApp extends foundry.applications.api.Handlebars
       costPerDay: { first: null, standard: null, steerage: null }
     };
     this.modes = [...this.modes, next];
-    this.render(true);
+    this.render({ force: true });
   }
 
   _deleteMode(index) {
     if (!Number.isFinite(index)) return;
     this.modes = this.modes.filter((_, idx) => idx !== index);
-    this.render(true);
+    this.render({ force: true });
   }
 
   _readForm() {

@@ -1,27 +1,27 @@
 <style>
-    .indy-route-manager .window-content {
+    .traveler-manager .window-content {
         overflow: auto;
         padding: 12px 16px;
     }
-    .indy-route-manager form {
+    .traveler-manager form {
         display: grid;
         gap: 10px;
     }
-    .indy-route-manager .route-toolbar {
+    .traveler-manager .route-toolbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
     }
-    .indy-route-manager .route-toolbar-actions {
+    .traveler-manager .route-toolbar-actions {
         display: flex;
         gap: 6px;
     }
-    .indy-route-manager .route-list {
+    .traveler-manager .route-list {
         display: grid;
         gap: 10px;
     }
-    .indy-route-manager .route-item {
+    .traveler-manager .route-item {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
@@ -31,20 +31,20 @@
         border-radius: 8px;
         background: var(--color-bg);
     }
-    .indy-route-manager .route-item.selected {
+    .traveler-manager .route-item.selected {
         border-color: var(--color-border-highlight);
         box-shadow: 0 0 0 1px var(--color-border-highlight) inset;
     }
-    .indy-route-manager .route-name {
+    .traveler-manager .route-name {
         width: 100%;
     }
-    .indy-route-manager .route-name-row {
+    .traveler-manager .route-name-row {
         display: flex;
         align-items: center;
         gap: 6px;
         min-width: 0;
     }
-    .indy-route-manager .route-drag-handle {
+    .traveler-manager .route-drag-handle {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -56,18 +56,18 @@
         cursor: grab;
         flex: 0 0 auto;
     }
-    .indy-route-manager .route-drag-handle:active {
+    .traveler-manager .route-drag-handle:active {
         cursor: grabbing;
     }
-    .indy-route-manager .route-drag-handle i {
+    .traveler-manager .route-drag-handle i {
         font-size: 0.7rem;
         opacity: 0.7;
     }
-    .indy-route-manager .route-name-row .route-name {
+    .traveler-manager .route-name-row .route-name {
         flex: 1 1 auto;
         min-width: 0;
     }
-    .indy-route-manager .route-info {
+    .traveler-manager .route-info {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -78,24 +78,24 @@
         color: var(--color-text-light-6);
         background: var(--color-bg-btn);
     }
-    .tooltip.indy-route-tooltip {
+    .tooltip.traveler-tooltip {
         max-width: 320px;
     }
-    .indy-route-manager .route-actions {
+    .traveler-manager .route-actions {
         display: flex;
         gap: 6px;
         justify-content: flex-end;
     }
-    .indy-route-manager .route-item.drag-over {
+    .traveler-manager .route-item.drag-over {
         border-color: var(--color-border-highlight);
         box-shadow: 0 0 0 2px var(--color-border-highlight) inset;
     }
-    .indy-route-manager .route-item.dragging {
+    .traveler-manager .route-item.dragging {
         opacity: 0.65;
     }
 </style>
 
-<form class="indy-route-manager">
+<form class="traveler-manager">
     <div class="route-toolbar">
         <button type="button" data-action="draw-route">Draw New Route</button>
         <div class="route-toolbar-actions">
@@ -114,7 +114,7 @@
                         </span>
                         <input class="route-name" type="text" data-action="rename-route" data-route-id="{{route.id}}" value="{{route.name}}" maxlength="50" />
                         {{#if route.lengthLabel}}
-                        <span class="route-info" data-tooltip="{{route.lengthLabel}}" data-tooltip-direction="UP" data-tooltip-class="indy-route-tooltip">
+                        <span class="route-info" data-tooltip="{{route.lengthLabel}}" data-tooltip-direction="UP" data-tooltip-class="traveler-tooltip">
                             <i class="fa-solid fa-ruler"></i>
                         </span>
                         {{/if}}

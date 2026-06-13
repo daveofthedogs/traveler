@@ -13,15 +13,15 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
   };
 
   static DEFAULT_OPTIONS = foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
-    id: "indy-route-manager",
-    window: { title: "Indy Route Manager", resizable: true },
+    id: "traveler-manager",
+    window: { title: "Traveler Route Manager", resizable: true },
     position: { width: 580, height: 500 },
-    classes: ["indy-route", "indy-route-manager"]
+    classes: ["traveler", "traveler-manager"]
   }, { inplace: false });
 
   static show() {
     this._instance ??= new IndyRouteManager();
-    return this._instance.render(true);
+    return this._instance.render({ force: true });
   }
 
   constructor(options = {}) {
@@ -387,7 +387,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       await setSceneRoutes(routes);
       this.selectedId = moved.id;
       this._clearRouteDragState();
-      this.render(true);
+      this.render({ force: true });
     };
     content?.addEventListener("drop", this._routeDropHandler, true);
   }
@@ -409,7 +409,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
         await setSceneRoutes(routes);
         this.selectedId = record.id;
         this._previewRoute(record);
-        this.render(true);
+        this.render({ force: true });
       }
     });
   }
@@ -432,14 +432,14 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     this.selectedId = routeId;
     const route = this._getRoute(routeId);
     if (route) this._previewRoute(route);
-    this.render(true);
+    this.render({ force: true });
   }
 
   _playRoute(routeId) {
     const route = this._getRoute(routeId);
     if (!route?.points || route.points.length < 2) return;
     IndyRouteRenderer.clearRoute(routeId);
-    game.socket.emit(CHANNEL, { type: "INDY_CLEAR_ROUTE", payload: { routeId } });
+    game.socket.emit(CHANNEL, { type: "TRAVELER_CLEAR_ROUTE", payload: { routeId } });
     const built = buildRouteFromPoints(route.points, route.settings);
     const payload = {
       sceneId: canvas.scene.id,
@@ -450,7 +450,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       routeId,
       labelText: route.name
     };
-    game.socket.emit(CHANNEL, { type: "INDY_ROUTE", payload });
+    game.socket.emit(CHANNEL, { type: "TRAVELER_ROUTE", payload });
     IndyRouteRenderer.render(payload);
   }
 
@@ -492,7 +492,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
 
   _clearRoute(routeId) {
     IndyRouteRenderer.clearRoute(routeId);
-    game.socket.emit(CHANNEL, { type: "INDY_CLEAR_ROUTE", payload: { routeId } });
+    game.socket.emit(CHANNEL, { type: "TRAVELER_CLEAR_ROUTE", payload: { routeId } });
   }
 
   async _deleteRoute(routeId) {
@@ -523,7 +523,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       this.selectedId = null;
       IndyRouteRenderer.clearPreview();
     }
-    this.render(true);
+    this.render({ force: true });
   }
 
   _setDragOverTarget(target) {
@@ -550,7 +550,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     route.name = name?.trim() || route.name;
     route.updatedAt = Date.now();
     await setSceneRoutes(routes);
-    this.render(true);
+    this.render({ force: true });
   }
 
   _exportRoutes() {
@@ -560,8 +560,9 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       exportedAt: Date.now(),
       routes
     };
-    const fileName = `indy-route-${canvas?.scene?.id ?? "routes"}.json`;
-    saveDataToFile(JSON.stringify(payload, null, 2), "application/json", fileName);
+    const fileName = `traveler-${canvas?.scene?.id ?? "routes"}.json`;
+    // v14: saveDataToFile global removed; use foundry.utils.saveDataToFile.
+    foundry.utils.saveDataToFile(JSON.stringify(payload, null, 2), "application/json", fileName);
   }
 
   _importRoutes() {
@@ -598,7 +599,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       await setSceneRoutes(routes);
       this.selectedId = null;
       IndyRouteRenderer.clearPreview();
-      this.render(true);
+      this.render({ force: true });
       ui.notifications.info(`Imported ${routes.length} routes.`);
     }, { once: true });
     input.click();
@@ -619,7 +620,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
         await setSceneRoutes(routes);
         this.selectedId = route.id;
         this._previewRoute(route);
-        this.render(true);
+        this.render({ force: true });
       }
     });
   }
@@ -636,10 +637,10 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
         await setSceneRoutes(routes);
         this.selectedId = updated.id;
         this._previewRoute(updated);
-        this.render(true);
+        this.render({ force: true });
       }
     });
 
-    editor.render(true);
+    editor.render({ force: true });
   }
 }

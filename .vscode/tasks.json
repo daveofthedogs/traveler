@@ -5,7 +5,7 @@
                 
                 "label": "Copy Files to Folder",
                 "type": "shell",
-                "command": "robocopy . \"$env:LocalAppdata\\FoundryVTT\\Data\\modules\\indy-route\" /E /XD .git .vscode /XF module.json; if ($lastexitcode -le 8) { exit 0 }",
+                "command": "robocopy . \"$env:LocalAppdata\\FoundryVTT\\Data\\modules\\traveler\" /E /XD .git .vscode /XF module.json; if ($lastexitcode -le 8) { exit 0 }",
                 "problemMatcher": []            
             }
         

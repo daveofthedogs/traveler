@@ -119,7 +119,7 @@ export const IndyRouteTool = {
 
       if (this.state.autoPlay) {
         // Send to others
-        game.socket.emit(CHANNEL, { type: "INDY_ROUTE", payload });
+        game.socket.emit(CHANNEL, { type: "TRAVELER_ROUTE", payload });
 
         // Render locally too (emit doesn't loop back)
         IndyRouteRenderer.render(payload);
@@ -176,7 +176,7 @@ export const IndyRouteTool = {
       if (e.key === "Escape") { e.preventDefault(); return cleanup("Route tool cancelled."); }
       if (e.key === "Backspace") { e.preventDefault(); this.state.points.pop(); return drawPreview(); }
       if (e.key === "Enter") { e.preventDefault(); stopListeners(); return finishAndBroadcast(); }
-      if (e.key.toLowerCase() === "o" && e.altKey) { e.preventDefault(); new IndyRouteSettingsApp().render(true); }
+      if (e.key.toLowerCase() === "o" && e.altKey) { e.preventDefault(); new IndyRouteSettingsApp().render({ force: true }); }
     };
 
     // attach
@@ -190,6 +190,6 @@ export const IndyRouteTool = {
     this.state = null;
     IndyRouteRenderer.clearLocal();
     // others
-    game.socket.emit(CHANNEL, { type: "INDY_CLEAR" });
+    game.socket.emit(CHANNEL, { type: "TRAVELER_CLEAR" });
   }
 };
