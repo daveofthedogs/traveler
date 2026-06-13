@@ -195,3 +195,42 @@ describe("TravelerChangeLevelBehavior._resolveTargetElevation", () => {
     expect(b._resolveTargetElevation()).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// _applyElevation / _applyFailureDamage
+// ---------------------------------------------------------------------------
+
+describe("TravelerChangeLevelBehavior._applyElevation", () => {
+  it("updates token elevation when target is resolved", async () => {
+    const b = makeBehavior({ targetElevation: 30 });
+    const tokenDoc = { update: vi.fn(async () => {}) };
+    await b._applyElevation(tokenDoc);
+    expect(tokenDoc.update).toHaveBeenCalledWith({ elevation: 30 }, { animate: false });
+  });
+
+  it("does nothing when elevation cannot be resolved", async () => {
+    const b = makeBehavior({ targetElevation: null, targetLevelId: null });
+    const tokenDoc = { update: vi.fn(async () => {}) };
+    await b._applyElevation(tokenDoc);
+    expect(tokenDoc.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("TravelerChangeLevelBehavior._applyFailureDamage", () => {
+  it("does nothing when failureDamage is blank", async () => {
+    const b = makeBehavior({ failureDamage: "" });
+    const actor = { applyDamage: vi.fn() };
+    await b._applyFailureDamage(actor);
+    expect(actor.applyDamage).not.toHaveBeenCalled();
+  });
+
+  it("calls actor.applyDamage when available", async () => {
+    const b = makeBehavior({ failureDamage: "2d6", checkLabel: "Climb" });
+    const actor = {
+      name: "Hero",
+      applyDamage: vi.fn(async () => {})
+    };
+    await b._applyFailureDamage(actor);
+    expect(actor.applyDamage).toHaveBeenCalledWith(10);
+  });
+});

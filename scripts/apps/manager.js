@@ -158,7 +158,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     }
     const totalUnits = (totalPx / gridSize) * distancePerSquare;
     const useMiles = route?.settings?.travelMode && route.settings.travelMode !== "none";
-    const units = useMiles ? "mi" : (distUnits || canvas?.scene?.grid?.units ?? "units");
+    const units = useMiles ? "mi" : (distUnits || (canvas?.scene?.grid?.units ?? "units"));
     const rounded = Math.round(totalUnits * 100) / 100;
     const distanceLabel = `Length: ${rounded} ${units}`;
     if (useMiles) {

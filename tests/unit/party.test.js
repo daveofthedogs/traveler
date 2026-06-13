@@ -55,6 +55,34 @@ describe("createParty", () => {
 });
 
 // ---------------------------------------------------------------------------
+// saveParties / getParties
+// ---------------------------------------------------------------------------
+
+describe("saveParties / getParties", () => {
+  beforeEach(() => {
+    game.settings.get = vi.fn(() => []);
+    game.settings.set = vi.fn(async () => {});
+  });
+
+  it("saveParties persists via game.settings.set", async () => {
+    const parties = [createParty({ name: "Saved" })];
+    await saveParties(parties);
+    expect(game.settings.set).toHaveBeenCalledWith("traveler", "parties", parties);
+  });
+
+  it("getParties returns [] when settings.get throws", () => {
+    game.settings.get = vi.fn(() => { throw new Error("not ready"); });
+    expect(getParties()).toEqual([]);
+  });
+
+  it("getParties returns stored array", () => {
+    const parties = [createParty({ name: "A" })];
+    game.settings.get = vi.fn(() => parties);
+    expect(getParties()).toEqual(parties);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // RESOLUTION_MODES / TRAVEL_PACE_MODES constants
 // ---------------------------------------------------------------------------
 
