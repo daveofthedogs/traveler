@@ -15,7 +15,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Commits
 - `e0662db` — 2026-06-13 — Add architecture.md documentation
 - `c3df688` — 2026-06-13 — Uplift to Foundry v14; fork renamed from `indy-route` to `traveler`
-- *(pending commit)* — 2026-06-13 — Add v14 Scene Levels support (per-point elevation, level picker, token elevation during playback)
+- `5bd191a` — 2026-06-13 — Add v14 Scene Levels support (per-point elevation, level picker, token elevation during playback)
 
 ### Added
 - `architecture.md` — full module documentation including Mermaid class, sequence, and data-flow diagrams.
