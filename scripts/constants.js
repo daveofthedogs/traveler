@@ -13,5 +13,9 @@ export const MSG = {
   PLAYER_IMMEDIATE: "TRAVELER_PLAYER_IMMEDIATE",  // immediate mode: play now for all
   PLAYER_PROPOSE:   "TRAVELER_PLAYER_PROPOSE",    // approval mode: GM queue
   PLAYER_APPROVE:   "TRAVELER_PLAYER_APPROVE",    // GM approves: play for all
-  PLAYER_REJECT:    "TRAVELER_PLAYER_REJECT"      // GM rejects: notify player
+  PLAYER_REJECT:    "TRAVELER_PLAYER_REJECT",     // GM rejects: notify player
+
+  // Encounter system
+  ENCOUNTER_PAUSE:  "TRAVELER_ENCOUNTER_PAUSE",   // GM pauses animation (all clients)
+  ENCOUNTER_RESUME: "TRAVELER_ENCOUNTER_RESUME"   // GM resumes animation (all clients)
 };

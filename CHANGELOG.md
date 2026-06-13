@@ -20,6 +20,21 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `3e7e174` — 2026-06-13 — Add player pathfinding with A*, fog-of-war gating, and GM approval workflow
 - `97ca978` — 2026-06-13 — Add Vitest unit tests, Quench integration tests, Docker CI, and GitHub Actions workflow
 - *(pending)* — 2026-06-13 — Fix `applyColorNumbers` for hex strings without leading `#`; add `.gitignore` and `.vscode/settings.json`
+- *(pending)* — 2026-06-13 — Add Encounter System (encounter zones on routes, GM confirmation dialog, Rollable Table integration)
+
+### Added — Encounter System
+- **`scripts/encounters.js`**: `EncounterManager` — `createEncounterZone`, `checkZones`, `resetZoneTriggers`, `rollTable`, `buildFixedResult`, `importActor`, `spawnToken`, `createNote`, `createChatMessage`, `resolveEncounter`, `handleZoneFired`.
+- **`scripts/apps/encounter-dialog.js`**: `EncounterDialog` — awaitable `ApplicationV2`. Accept (resolve encounter), Regenerate (re-roll in-place), Decline (skip). Resolves `"accept"` or `"decline"`.
+- **`templates/encounter-dialog.hbs`** / **`templates/encounter-editor.hbs`**: GM dialog and route-editor Encounters tab templates.
+- **`scripts/renderer.js`**: `entry.encounterPaused` flag; `pauseRoute` / `resumeRoute`; encounter zone check in `onTick` (GM-only, non-reentrant).
+- **`scripts/routes.js`**: `createRouteRecord` initialises `encounters: []`.
+- **`scripts/constants.js`**: `MSG.ENCOUNTER_PAUSE`, `MSG.ENCOUNTER_RESUME`.
+- **`scripts/apps/settings-app.js`**: "Encounters" tab with zone CRUD (add/edit/delete explicit, auto-interval, and fixed types).
+- **`templates/settings.hbs`**: "⚔ Encounters" tab button and panel.
+- **`scripts/apps/manager.js`** / **`templates/route-manager.hbs`**: Orange `⚔ N` badge on routes with encounter zones.
+- **`scripts/traveler.js`**: Pre-loads encounter templates; exposes helpers on `globalThis.__travelerEncounters`; resets triggers on each `playRoute`.
+- **`tests/unit/encounters.test.js`**: 28 unit tests (zone firing, auto-interval math, trigger reset, fixed result builder).
+- **`tests/quench/encounters.quench.js`** + **`index.js`**: Integration tests for live zone checks, note creation, chat post, and `EncounterDialog` lifecycle.
 
 ### Fixed
 - **`scripts/settings.js`** — `applyColorNumbers` and `getSettings` now correctly parse hex colour strings that lack a leading `#` (e.g. `"ff6400"`). Extracted shared `_hexToNum` helper to remove duplicated parsing logic.

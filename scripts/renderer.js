@@ -50,6 +50,20 @@ export const IndyRouteRenderer = {
     root.previewRouteId = null;
   },
 
+  /** Pause a route's animation on this client (used by encounter system). */
+  pauseRoute(routeId) {
+    const root = this.ensureRoot();
+    const entry = root.containers.find((e) => e?.routeId === routeId);
+    if (entry) entry.encounterPaused = true;
+  },
+
+  /** Resume a paused route's animation on this client. */
+  resumeRoute(routeId) {
+    const root = this.ensureRoot();
+    const entry = root.containers.find((e) => e?.routeId === routeId);
+    if (entry) entry.encounterPaused = false;
+  },
+
   distance(a, b) {
     return Math.hypot(b.x - a.x, b.y - a.y);
   },
@@ -407,7 +421,7 @@ export const IndyRouteRenderer = {
 
     const root = this.ensureRoot();
     const { container, finalLine, dot } = this.createRouteContainer(settings);
-    const entry = { container, routeId: routeId ?? null };
+    const entry = { container, routeId: routeId ?? null, encounterPaused: false };
     root.containers.push(entry);
 
     let totalLen = 0;
@@ -664,11 +678,19 @@ export const IndyRouteRenderer = {
         return;
       }
 
+      // Encounter state — tracks tPrev for zone boundary detection
+      const encState = { tPrev: 0, _busy: false };
+
       const onTick = (delta) => {
         if (container?.destroyed || finalLine?.destroyed || dot?.destroyed) {
           ticker.remove(onTick);
           return;
         }
+
+        // Freeze progress while the GM is resolving an encounter dialog
+        if (entry.encounterPaused) return;
+
+        const tPrev = encState.tPrev;
         elapsed += delta / 60;
 
         const t = Math.min(1, elapsed / duration);
@@ -694,6 +716,26 @@ export const IndyRouteRenderer = {
           idx += 1;
         }
         if (t >= labelRevealT) maybeShowLabel();
+
+        // ── Encounter zone check (GM only, non-reentrant) ───────────────
+        encState.tPrev = t;
+        if (game.user?.isGM && !encState._busy && Array.isArray(payload.encounters) && payload.encounters.length) {
+          const { checkZones, handleZoneFired } = globalThis.__travelerEncounters ?? {};
+          if (checkZones && handleZoneFired) {
+            const fired = checkZones(payload.encounters, t, tPrev);
+            if (fired.length > 0) {
+              const currentPos = path[Math.min(idx - 1, path.length - 1)];
+              encState._busy = true;
+              // Fire zones sequentially to avoid dialog overlap
+              (async () => {
+                for (const zone of fired) {
+                  await handleZoneFired(zone, routeId, currentPos);
+                }
+                encState._busy = false;
+              })();
+            }
+          }
+        }
 
         if (t >= 1) {
           ticker.remove(onTick);

@@ -107,6 +107,20 @@
         white-space: nowrap;
         flex: 0 0 auto;
     }
+    .traveler-manager .route-encounter-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 0.7em;
+        font-weight: 600;
+        color: #fff;
+        background: #7d3c00;
+        border: 1px solid #a05000;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
     /* ── Proposals section ── */
     .traveler-manager .proposals-section {
         margin-top: 14px;
@@ -195,6 +209,11 @@
                         {{#if route.levelName}}
                         <span class="route-level-badge" data-tooltip="Scene Level: {{route.levelName}}" data-tooltip-direction="UP">
                             <i class="fa-solid fa-layer-group"></i> {{route.levelName}}
+                        </span>
+                        {{/if}}
+                        {{#if route.encounterCount}}
+                        <span class="route-encounter-badge" data-tooltip="{{route.encounterCount}} encounter zone(s)" data-tooltip-direction="UP">
+                            <i class="fa-solid fa-sword"></i> {{route.encounterCount}}
                         </span>
                         {{/if}}
                         {{#if route.lengthLabel}}

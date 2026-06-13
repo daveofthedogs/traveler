@@ -1,0 +1,263 @@
+<style>
+  .encounter-editor { padding: 2px 0; }
+
+  .encounter-editor .enc-zone-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .encounter-editor .enc-zone-item {
+    background: var(--color-bg-option);
+    border: 1px solid var(--color-border-light-2);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .encounter-editor .enc-zone-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .encounter-editor .enc-zone-icon {
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+    color: var(--color-text-dark-secondary);
+  }
+
+  .encounter-editor .enc-zone-label {
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .encounter-editor .enc-zone-meta {
+    font-size: 0.78em;
+    color: var(--color-text-dark-secondary);
+    margin-top: 2px;
+  }
+
+  .encounter-editor .enc-zone-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .encounter-editor .enc-zone-actions button {
+    padding: 2px 7px;
+    font-size: 0.82em;
+    cursor: pointer;
+  }
+
+  .encounter-editor .enc-add-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .encounter-editor .enc-add-row button {
+    flex: 1;
+    min-width: 80px;
+    font-size: 0.82em;
+    padding: 5px 0;
+    cursor: pointer;
+  }
+
+  .encounter-editor .enc-empty {
+    font-size: 0.85em;
+    color: var(--color-text-dark-secondary);
+    padding: 8px 0;
+    text-align: center;
+  }
+
+  /* Inline edit form */
+  .encounter-editor .enc-zone-form {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-border-light-2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .encounter-editor .enc-form-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .encounter-editor .enc-form-row label {
+    min-width: 90px;
+    font-size: 0.82em;
+    color: var(--color-text-dark-secondary);
+  }
+
+  .encounter-editor .enc-form-row input,
+  .encounter-editor .enc-form-row select {
+    flex: 1;
+    font-size: 0.85em;
+  }
+
+  .encounter-editor .enc-form-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .encounter-editor .enc-form-actions button {
+    flex: 1;
+    font-size: 0.82em;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+</style>
+
+<div class="encounter-editor">
+
+  {{#if encounters.length}}
+  <ul class="enc-zone-list">
+    {{#each encounters as |zone idx|}}
+    <li class="enc-zone-item" data-zone-id="{{zone.id}}">
+      <div class="enc-zone-row">
+        <span class="enc-zone-icon">
+          {{#if (eq zone.type "auto")}}<i class="fa-solid fa-arrows-spin" title="Auto-interval"></i>
+          {{else if (eq zone.type "fixed")}}<i class="fa-solid fa-bookmark" title="Fixed encounter"></i>
+          {{else}}<i class="fa-solid fa-map-pin" title="Explicit zone"></i>{{/if}}
+        </span>
+
+        <div style="flex:1;overflow:hidden;">
+          <div class="enc-zone-label">
+            {{#if zone.label}}{{zone.label}}{{else}}{{zone.tableName}}{{/if}}
+          </div>
+          <div class="enc-zone-meta">
+            {{#if (eq zone.type "auto")}}
+              Every {{zone.frequencyPct}}% · {{zone.chancePct}}% chance
+            {{else if (eq zone.type "fixed")}}
+              Fixed · At {{zone.tPct}}%
+            {{else}}
+              At {{zone.tPct}}% · {{zone.chancePct}}% chance
+            {{/if}}
+          </div>
+        </div>
+
+        <div class="enc-zone-actions">
+          <button type="button"
+                  data-action="edit-zone"
+                  data-zone-id="{{zone.id}}"
+                  data-tooltip="Edit">
+            <i class="fa-solid fa-pencil"></i>
+          </button>
+          <button type="button"
+                  data-action="delete-zone"
+                  data-zone-id="{{zone.id}}"
+                  data-tooltip="Delete">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </div>
+
+      {{#if (eq zone.id ../editingZoneId)}}
+      <div class="enc-zone-form">
+
+        <div class="enc-form-row">
+          <label>Label</label>
+          <input type="text" name="enc-label" value="{{zone.label}}" placeholder="optional GM label">
+        </div>
+
+        {{#unless (eq zone.type "auto")}}
+        <div class="enc-form-row">
+          <label>Position (%)</label>
+          <input type="number" name="enc-t" value="{{zone.tPct}}" min="0" max="100" step="1">
+        </div>
+        {{/unless}}
+
+        {{#if (eq zone.type "auto")}}
+        <div class="enc-form-row">
+          <label>Every (%)</label>
+          <input type="number" name="enc-frequency" value="{{zone.frequencyPct}}" min="1" max="50" step="1"
+                 title="Check for encounter every N% of total route distance">
+        </div>
+        {{/if}}
+
+        {{#unless (eq zone.type "fixed")}}
+        <div class="enc-form-row">
+          <label>Chance (%)</label>
+          <input type="number" name="enc-chance" value="{{zone.chancePct}}" min="1" max="100" step="1">
+        </div>
+
+        <div class="enc-form-row">
+          <label>Table</label>
+          <select name="enc-table">
+            <option value="">— select a table —</option>
+            {{#each ../rollTables as |t|}}
+            <option value="{{t.id}}" {{#if (eq t.id zone.tableId)}}selected{{/if}}>{{t.name}}</option>
+            {{/each}}
+          </select>
+        </div>
+        {{/unless}}
+
+        {{#if (eq zone.type "fixed")}}
+        <div class="enc-form-row">
+          <label>Actor</label>
+          <select name="enc-actor">
+            <option value="">— select an actor —</option>
+            {{#each ../worldActors as |a|}}
+            <option value="{{a.id}}" {{#if (eq a.id zone.actorId)}}selected{{/if}}>{{a.name}}</option>
+            {{/each}}
+          </select>
+        </div>
+        {{/if}}
+
+        <div class="enc-form-row">
+          <label>Environment</label>
+          <input type="text" name="enc-environment" value="{{zone.environment}}" placeholder="e.g. Coniferous Forest">
+        </div>
+
+        <div class="enc-form-row">
+          <label>Options</label>
+          <span style="display:flex;gap:12px;font-size:0.82em;">
+            <label><input type="checkbox" name="enc-chat"  {{#if zone.chatMessage}}checked{{/if}}> Chat</label>
+            <label><input type="checkbox" name="enc-note"  {{#if zone.createNote}}checked{{/if}}> Note pin</label>
+            <label><input type="checkbox" name="enc-spawn" {{#if zone.spawnToken}}checked{{/if}}> Spawn token</label>
+          </span>
+        </div>
+
+        <div class="enc-form-actions">
+          <button type="button" data-action="save-zone" data-zone-id="{{zone.id}}">
+            <i class="fa-solid fa-floppy-disk"></i> Save
+          </button>
+          <button type="button" data-action="cancel-zone-edit">
+            Cancel
+          </button>
+        </div>
+      </div>
+      {{/if}}
+
+    </li>
+    {{/each}}
+  </ul>
+  {{else}}
+  <p class="enc-empty">No encounter zones defined for this route.</p>
+  {{/if}}
+
+  <div class="enc-add-row">
+    <button type="button" data-action="add-zone-explicit">
+      <i class="fa-solid fa-map-pin"></i> Add Zone
+    </button>
+    <button type="button" data-action="add-zone-auto">
+      <i class="fa-solid fa-arrows-spin"></i> Auto-interval
+    </button>
+    <button type="button" data-action="add-zone-fixed">
+      <i class="fa-solid fa-bookmark"></i> Fixed Encounter
+    </button>
+  </div>
+
+</div>

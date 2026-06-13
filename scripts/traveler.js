@@ -33,7 +33,21 @@ Hooks.once("init", () => {
   };
 
   // Pre-load Handlebars templates used by the behavior's dialog.
-  loadTemplates([`modules/${MODULE_ID}/templates/level-check-dialog.hbs`]);
+  loadTemplates([
+    `modules/${MODULE_ID}/templates/level-check-dialog.hbs`,
+    `modules/${MODULE_ID}/templates/encounter-dialog.hbs`,
+    `modules/${MODULE_ID}/templates/encounter-editor.hbs`
+  ]);
+
+  // Expose encounter helpers on globalThis so renderer.js can use them
+  // without a circular ESM import (renderer is a peer, not a child).
+  import("./encounters.js").then((enc) => {
+    globalThis.__travelerEncounters = {
+      checkZones:      enc.checkZones,
+      handleZoneFired: enc.handleZoneFired,
+      resetZoneTriggers: enc.resetZoneTriggers
+    };
+  });
 
   /* ------------------------------------------------------------------ */
   /* Settings                                                            */
@@ -235,6 +249,11 @@ Hooks.once("ready", () => {
       settings = resolveSettings(baseSettings);
     }
     if (!Array.isArray(path) || path.length < 2 || !settings) return null;
+    // Reset encounter zone triggers so they fire fresh each playback
+    const encounters = Array.isArray(options.encounters) ? options.encounters : [];
+    const { resetZoneTriggers } = globalThis.__travelerEncounters ?? {};
+    if (resetZoneTriggers) resetZoneTriggers(encounters);
+
     return {
       sceneId,
       path,
@@ -243,7 +262,8 @@ Hooks.once("ready", () => {
       lingerMs: Number.isFinite(options.lingerMs) ? options.lingerMs : settings.lingerMs,
       routeId: options.routeId ?? null,
       labelText: options.name ?? options.labelText ?? "",
-      elevations
+      elevations,
+      encounters
     };
   };
 
@@ -343,6 +363,11 @@ Hooks.once("ready", () => {
         ...(overrideLabelArrow !== undefined ? { labelShowArrow: overrideLabelArrow } : null),
         ...(Number.isFinite(overrideDrawSpeed) ? { drawSpeed: overrideDrawSpeed } : null)
       };
+      // Prepare encounters and reset trigger state for this playback
+      const encounters = Array.isArray(route.encounters) ? foundry.utils.deepClone(route.encounters) : [];
+      const { resetZoneTriggers } = globalThis.__travelerEncounters ?? {};
+      if (resetZoneTriggers) resetZoneTriggers(encounters);
+
       const payload = {
         sceneId: canvas?.scene?.id ?? null,
         path: built.path,
@@ -351,7 +376,8 @@ Hooks.once("ready", () => {
         lingerMs: Number.isFinite(options.lingerMs) ? options.lingerMs : settings.lingerMs,
         routeId: id,
         labelText: options.labelText ?? route.name,
-        elevations: built.elevations ?? null
+        elevations: built.elevations ?? null,
+        encounters
       };
       game.socket.emit(CHANNEL, { type: "TRAVELER_ROUTE", payload });
       IndyRouteRenderer.render(payload);

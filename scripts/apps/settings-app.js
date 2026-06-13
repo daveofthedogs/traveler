@@ -1,4 +1,5 @@
 import { MODULE_ID, DEFAULTS, normalizeSettings, getMapPixelSize, getTravelModes } from "../settings.js";
+import { createEncounterZone } from "../encounters.js";
 import { buildRouteFromPoints } from "../routes.js";
 import { IndyRouteRenderer } from "../renderer.js";
 
@@ -28,9 +29,14 @@ export class IndyRouteSettingsBase extends foundry.applications.api.HandlebarsAp
       settings: merged,
       route: this.route ?? null,
       activeTab: this.activeTab,
-      tabs: ["general", "line", "dot", "label", "animation", "camera", "smoothing"],
-      travelModes: getTravelModes(),
-      labelFonts: this._getLabelFonts()
+      tabs: ["general", "line", "dot", "label", "animation", "camera", "smoothing", "encounters"],
+      travelModes:  getTravelModes(),
+      labelFonts:   this._getLabelFonts(),
+      // Encounters tab context
+      encounters:      this._prepareEncounters(),
+      editingZoneId:   this._editingZoneId ?? null,
+      rollTables:      this._getRollTables(),
+      worldActors:     this._getWorldActors()
     };
   }
 
@@ -100,6 +106,29 @@ export class IndyRouteSettingsBase extends foundry.applications.api.HandlebarsAp
     return Array.from(options.values());
   }
 
+  /** Prepare encounter zones for the template (adds display-friendly fields). */
+  _prepareEncounters() {
+    const zones = this.route?.encounters ?? [];
+    return zones.map((z) => ({
+      ...z,
+      tPct:         Math.round((z.t ?? 0.5) * 100),
+      chancePct:    Math.round((z.chance ?? 0.3) * 100),
+      frequencyPct: Math.round((z.frequency ?? 0.1) * 100)
+    }));
+  }
+
+  /** Collect world RollTables for the zone editor <select>. */
+  _getRollTables() {
+    if (!game.tables) return [];
+    return [...game.tables.values()].map((t) => ({ id: t.id, name: t.name }));
+  }
+
+  /** Collect world Actors for fixed-encounter <select>. */
+  _getWorldActors() {
+    if (!game.actors) return [];
+    return [...game.actors.values()].map((a) => ({ id: a.id, name: a.name }));
+  }
+
   activateListeners(html) {
     super.activateListeners(html);
     // Handled in _attachPartListeners for ApplicationV2 parts.
@@ -128,6 +157,22 @@ export class IndyRouteSettingsBase extends foundry.applications.api.HandlebarsAp
         this._handleSave();
         return;
       }
+
+      // ── Encounter editor actions ───────────────────────────────────────
+      const action = event.target?.closest?.("[data-action]")?.dataset?.action;
+      if (!action || !action.startsWith("add-zone") && !action.startsWith("edit-zone") &&
+          !action.startsWith("delete-zone") && !action.startsWith("save-zone") &&
+          action !== "cancel-zone-edit") return;
+      event.preventDefault();
+      const zoneId = event.target?.closest?.("[data-zone-id]")?.dataset?.zoneId ?? null;
+
+      if (action === "add-zone-explicit") this._addEncounterZone("explicit");
+      else if (action === "add-zone-auto")     this._addEncounterZone("auto");
+      else if (action === "add-zone-fixed")    this._addEncounterZone("fixed");
+      else if (action === "edit-zone")         { this._editingZoneId = zoneId; this.render({ force: true }); }
+      else if (action === "cancel-zone-edit")  { this._editingZoneId = null;   this.render({ force: true }); }
+      else if (action === "delete-zone")       this._deleteEncounterZone(zoneId);
+      else if (action === "save-zone")         this._saveEncounterZone(zoneId, root);
     };
     content?.addEventListener("click", this._tabClickHandler, true);
 
@@ -432,6 +477,64 @@ export class IndyRouteEditor extends IndyRouteSettingsBase {
     if (this.onSave) await this.onSave(updated);
     this.close();
   }
+
+  // ── Encounter zone CRUD ────────────────────────────────────────────────
+
+  _addEncounterZone(type) {
+    if (!this.route) return;
+    this.route.encounters = this.route.encounters ?? [];
+    const zone = createEncounterZone(type);
+    this.route.encounters.push(zone);
+    this._editingZoneId = zone.id;
+    this.render({ force: true });
+  }
+
+  _deleteEncounterZone(zoneId) {
+    if (!this.route || !zoneId) return;
+    this.route.encounters = (this.route.encounters ?? []).filter((z) => z.id !== zoneId);
+    if (this._editingZoneId === zoneId) this._editingZoneId = null;
+    this.render({ force: true });
+  }
+
+  _saveEncounterZone(zoneId, root) {
+    if (!this.route || !zoneId) return;
+    const zone = (this.route.encounters ?? []).find((z) => z.id === zoneId);
+    if (!zone) return;
+
+    const form = (root instanceof HTMLElement ? root : root?.[0])
+      ?.querySelector?.(`[data-zone-id="${zoneId}"] .enc-zone-form`);
+    if (!form) { this._editingZoneId = null; this.render({ force: true }); return; }
+
+    const v = (name) => form.querySelector(`[name="${name}"]`)?.value ?? "";
+    const cb = (name) => form.querySelector(`[name="${name}"]`)?.checked ?? false;
+
+    if (zone.type !== "auto") {
+      zone.t = Math.max(0, Math.min(1, parseFloat(v("enc-t")) / 100)) || 0.5;
+    } else {
+      zone.frequency = Math.max(0.01, Math.min(0.5, parseFloat(v("enc-frequency")) / 100)) || 0.1;
+    }
+
+    if (zone.type !== "fixed") {
+      zone.chance   = Math.max(0.01, Math.min(1, parseFloat(v("enc-chance")) / 100)) || 0.3;
+      zone.tableId   = v("enc-table") || null;
+      const table    = zone.tableId ? game.tables?.get(zone.tableId) : null;
+      zone.tableName = table?.name ?? zone.tableName ?? "";
+    } else {
+      zone.actorId   = v("enc-actor") || null;
+      zone.chance    = 1;
+    }
+
+    zone.label       = v("enc-label");
+    zone.environment = v("enc-environment");
+    zone.chatMessage = cb("enc-chat");
+    zone.createNote  = cb("enc-note");
+    zone.spawnToken  = cb("enc-spawn");
+
+    this._editingZoneId = null;
+    this.render({ force: true });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
 
   async close(options = {}) {
     IndyRouteRenderer.clearPreview();

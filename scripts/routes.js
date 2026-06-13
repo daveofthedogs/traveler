@@ -145,6 +145,7 @@ export function createRouteRecord(points, baseSettings, name) {
       return point;
     }),
     settings,
+    encounters: [],   // EncounterZone[] — populated via the Encounters tab in the route editor
     createdAt: now,
     updatedAt: now
   };

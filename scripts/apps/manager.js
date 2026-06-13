@@ -215,8 +215,9 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
   async _prepareContext() {
     const routes = getSceneRoutes().map((route) => ({
       ...route,
-      lengthLabel: this._getRouteLengthLabel(route),
-      levelName: this._getRouteLevelName(route)
+      lengthLabel:    this._getRouteLengthLabel(route),
+      levelName:      this._getRouteLevelName(route),
+      encounterCount: (route.encounters ?? []).length
     }));
 
     const showProposals = game.user.isGM && getPlayerRouteMode() === PLAYER_ROUTE_MODE.APPROVAL;

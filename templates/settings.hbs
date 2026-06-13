@@ -93,6 +93,7 @@
         <button type="button" class="tab {{#if (eq activeTab "animation")}}active{{/if}}" data-tab="animation">Animation</button>
         <button type="button" class="tab {{#if (eq activeTab "camera")}}active{{/if}}" data-tab="camera">Camera</button>
         <button type="button" class="tab {{#if (eq activeTab "smoothing")}}active{{/if}}" data-tab="smoothing">Smoothing</button>
+        {{#if route}}<button type="button" class="tab {{#if (eq activeTab "encounters")}}active{{/if}}" data-tab="encounters">⚔ Encounters</button>{{/if}}
     </div>
 
     <section class="tab-panel {{#if (eq activeTab "general")}}active{{/if}}" data-tab-panel="general">
@@ -384,9 +385,21 @@
     </div>
     </section>
 
+    {{#if route}}
+    <section class="tab-panel {{#if (eq activeTab "encounters")}}active{{/if}}" data-tab-panel="encounters">
+        {{> "modules/traveler/templates/encounter-editor.hbs"
+             encounters=encounters
+             editingZoneId=editingZoneId
+             rollTables=rollTables
+             worldActors=worldActors}}
+    </section>
+    {{/if}}
+
     <footer class="sheet-footer flexrow">
+        {{#unless (eq activeTab "encounters")}}
         <button type="button" data-action="save">
-        <i class="fas fa-save"></i> Save
+            <i class="fas fa-save"></i> Save
         </button>
+        {{/unless}}
     </footer>
 </form>
