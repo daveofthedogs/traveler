@@ -94,7 +94,13 @@ jobs:
         run: npm run foundry:wait
         env:
           FOUNDRY_URL:          http://localhost:30000
-          FOUNDRY_WAIT_TIMEOUT: "180"
+          FOUNDRY_WAIT_TIMEOUT: "300"
+
+      - name: Bootstrap Foundry (install dnd5e, verify Quench)
+        run: npm run foundry:bootstrap
+        env:
+          FOUNDRY_URL:       http://localhost:30000
+          FOUNDRY_ADMIN_KEY: ${{ secrets.FOUNDRY_ADMIN_KEY }}
 
       - name: Run Quench integration tests
         run: npm run test:integration
@@ -102,6 +108,10 @@ jobs:
           FOUNDRY_URL:       http://localhost:30000
           FOUNDRY_ADMIN_KEY: ${{ secrets.FOUNDRY_ADMIN_KEY }}
           QUENCH_TIMEOUT_MS: "300000"
+
+      - name: Dump Foundry logs on failure
+        if: failure()
+        run: docker compose -f docker/compose.test.yml logs --tail=200 foundry || true
 
       - name: Stop Foundry
         if: always()

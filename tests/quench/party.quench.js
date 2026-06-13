@@ -14,6 +14,7 @@ import {
   resolvePartyCheck,
   PartyCheckSession
 } from "../../scripts/party.js";
+import { CHANNEL, MSG } from "../../scripts/constants.js";
 
 export function registerPartyTests(quench) {
   quench.registerBatch("traveler.party", (context) => {
@@ -248,11 +249,6 @@ export function registerPartyTests(quench) {
         });
 
         // Simulate what a player's level-check dialog does.
-        const { CHANNEL, MSG } = await import("../../scripts/constants.js").catch(() => ({
-          CHANNEL: `module.traveler`,
-          MSG: { PARTY_CHECK_RESULT: "TRAVELER_PARTY_CHECK_RESULT" }
-        }));
-
         game.socket.emit(CHANNEL, {
           type: MSG.PARTY_CHECK_RESULT,
           payload: {

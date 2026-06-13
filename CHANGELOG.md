@@ -72,6 +72,26 @@ id, name, partyTokenActorId, memberActorIds[], resolutionMode, designatedActorId
 
 **Travel pace modes:** `slowest` | `average` | `fastest`
 
+### Changed — CI Bootstrap & Test Coverage
+
+- **`docker/patches/10-install-quench.sh`**: Container patch (Felddy `CONTAINER_PATCHES`) that
+  downloads Quench v0.10.0 into `/data/modules/quench` on every fresh CI volume.
+- **`docker/compose.test.yml`**: Mounts patch directory; sets `FOUNDRY_TELEMETRY=false`,
+  `FOUNDRY_PROTOCOL=4`, and `CONTAINER_PATCHES=/data/container_patches`.
+- **`scripts/ci-bootstrap.js`**: Playwright bootstrap — verifies Quench, installs **dnd5e** via
+  Setup API/UI, confirms traveler + quench are active in the CI world.
+- **`scripts/foundry-playwright.js`**: Shared Playwright helpers (`gotoWithRetry`, setup auth,
+  `joinWorldAsGM`) used by bootstrap and Quench runner.
+- **`scripts/foundry-wait.js`**: Now waits for both `/api/status` and root HTTP reachability;
+  default timeout raised to 300 s.
+- **`scripts/run-quench.js`**: Uses shared helpers instead of navigating directly to `/game`.
+- **`package.json`**: Added `foundry:bootstrap` npm script.
+- **`.github/workflows/ci.yml`**: Runs bootstrap after `foundry:wait`; dumps Docker logs on failure.
+- **`vitest.config.js`**: Coverage scoped to unit-testable modules; thresholds remain 70 %.
+- **Unit tests**: Expanded coverage for smoothing, routes, fog-checker, level-check-dialog,
+  party-check-collector, settings, clock, encounters, change-level, party, and player-speed.
+- **`tests/quench/party.quench.js`**: Fixed invalid `await import()` in non-async socket test.
+
 ### Changed — Repository Housekeeping (pre-push)
 
 - **`docker-compose.test.yml` → `docker/compose.test.yml`**: Docker Compose file moved to a

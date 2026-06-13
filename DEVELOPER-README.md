@@ -503,8 +503,10 @@ npm run foundry:up        # docker compose -f docker/compose.test.yml up -d
 # 3. Wait for Foundry to finish initialising (~2-3 min on first run)
 npm run foundry:wait
 
-# 4. Install the Quench module inside Foundry (first time only)
-# Navigate to http://localhost:30000, log in, Settings → Add-on Modules → Install Quench
+# 4. Bootstrap dependencies (dnd5e + verify Quench)
+# Quench is auto-installed via docker/patches/10-install-quench.sh on container start.
+# dnd5e is downloaded via Foundry Setup (Playwright).
+npm run foundry:bootstrap
 
 # 5. Run integration tests
 npm run test:integration

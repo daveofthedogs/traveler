@@ -11,6 +11,7 @@
     "test:integration": "node scripts/run-quench.js",
     "test:inspect": "cross-env TRAVELER_KEEP_WORLD=true node scripts/run-quench.js",
     "foundry:wait": "node scripts/foundry-wait.js",
+    "foundry:bootstrap": "node scripts/ci-bootstrap.js",
     "foundry:up": "docker compose -f docker/compose.test.yml up -d",
     "foundry:down": "docker compose -f docker/compose.test.yml down",
     "foundry:down:clean": "docker compose -f docker/compose.test.yml down -v",

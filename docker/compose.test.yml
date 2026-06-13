@@ -15,6 +15,7 @@
 ##
 ##   npm run foundry:up          # starts the container (detached)
 ##   npm run foundry:wait        # waits for Foundry to be ready (~2 min first run)
+##   npm run foundry:bootstrap   # install dnd5e + verify Quench (Playwright)
 ##   npm run test:integration    # run Quench tests via Playwright
 ##
 ## ── Inspect mode — keep test data alive for manual inspection ────────────────
@@ -63,7 +64,19 @@ services:
       ## Silence the update-check nag
       FOUNDRY_RELEASE_CHANNEL:   "stable"
 
+      ## Headless CI — skip interactive telemetry prompt on every fresh volume
+      FOUNDRY_TELEMETRY:         "false"
+
+      ## Force IPv4 — avoids localhost connection issues on some CI runners
+      FOUNDRY_PROTOCOL:          "4"
+
+      ## Run container patches (install Quench) before Foundry starts
+      CONTAINER_PATCHES:         "/data/container_patches"
+
     volumes:
+      ## Container patches — sourced before Foundry starts (see docker/patches/)
+      - ./patches:/data/container_patches:ro
+
       ## Module source — read-only so tests never accidentally modify code.
       ## Path is relative to this compose file (../ = project root).
       - ..:/home/foundry/resources/app/modules/traveler:ro
