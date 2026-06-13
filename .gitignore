@@ -1,6 +1,7 @@
 # ── Node ────────────────────────────────────────────────────────────────────
 node_modules/
-package-lock.json
+# package-lock.json is intentionally committed so CI can use `npm ci` and
+# the actions/setup-node cache step works correctly.
 
 # ── Test output ─────────────────────────────────────────────────────────────
 coverage/
