@@ -25,6 +25,24 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `3cc96d8` — 2026-06-13 — Add world clock advance, player speed dialog, encounter speed scaling, per-scene distance override
 - `b949842` — 2026-06-13 — Update CHANGELOG with travel-time features
 - `1349ee7` — 2026-06-13 — Add Docker inspect mode, world:clean script, .env.example, named Foundry data volume
+- `b24889e` — 2026-06-13 — Rewrite README.md for Traveler; add DEVELOPER-README.md
+
+### Added — Documentation Overhaul
+
+- **`README.md`**: Completely rewritten. Title changed from *Indy Route* to *Traveler*. Attribution
+  link to the original [jwrpalmer99/indy-route](https://github.com/jwrpalmer99/indy-route)
+  repository added. Foundry v14 badge replaces old v13 badge. Full Table of Contents added.
+  New major sections: **GM Guide** (installation, recommended setup order, full module settings
+  reference table, scene configuration, all UI controls described button-by-button, encounter zone
+  editor, world clock, export/import, API reference) and **Player Guide** (player route tool
+  step-by-step, travel speed selection, fog-of-war constraints, GM approval workflow).
+- **`DEVELOPER-README.md`** *(new)*: Developer-focused documentation covering repository
+  structure, architecture overview with ASCII diagrams, key design decisions (system-agnostic
+  design, socket sync model, ESM-only, `globalThis` circular import avoidance, encounter pause
+  model, scene distance override), module lifecycle hooks, full data model (route record,
+  RouteSettings, EncounterZone, PlayerRouteProposal), socket message table, unit and integration
+  test runbooks, local CI setup steps, remote CI (GitHub Actions) configuration with required
+  secrets, and changelog convention.
 
 ### Added — Docker Inspect Mode & CI Ergonomics
 
