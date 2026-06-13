@@ -26,6 +26,37 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `b949842` — 2026-06-13 — Update CHANGELOG with travel-time features
 - `1349ee7` — 2026-06-13 — Add Docker inspect mode, world:clean script, .env.example, named Foundry data volume
 - `b24889e` — 2026-06-13 — Rewrite README.md for Traveler; add DEVELOPER-README.md
+- `91264e9` — 2026-06-13 — Fix encounter pause: broadcast ENCOUNTER_PAUSE/RESUME to all clients
+
+### Fixed — Encounter Pause Synchronisation (all clients)
+
+**Bug:** When an encounter zone fired during route playback, only the GM's animation paused while
+the EncounterDialog was open. Player clients continued uninterrupted and could reach the route
+destination before the GM resolved the encounter.
+
+**Root cause:** `handleZoneFired` called `IndyRouteRenderer.pauseRoute()` / `resumeRoute()`
+directly on the local renderer only. The `ENCOUNTER_PAUSE` and `ENCOUNTER_RESUME` socket message
+types existed in `constants.js` but were never emitted or handled.
+
+**Fix:**
+- **`scripts/encounters.js`**: Added two exported helpers, `broadcastEncounterPause(routeId)` and
+  `broadcastEncounterResume(routeId)`, each of which calls `game.socket.emit(CHANNEL, …)`. The
+  `handleZoneFired` function now calls these immediately after the local pause/resume calls so all
+  connected clients freeze and resume together.
+- **`scripts/traveler.js`**: Added socket handlers for `MSG.ENCOUNTER_PAUSE` and
+  `MSG.ENCOUNTER_RESUME` — each calls `IndyRouteRenderer.pauseRoute` / `resumeRoute` on the
+  receiving client.
+- **`tests/unit/encounters.test.js`**: Imported `broadcastEncounterPause` /
+  `broadcastEncounterResume`; added four new unit tests verifying the correct socket channel,
+  message type, and payload `routeId` for each helper.
+- **`tests/quench/encounters.quench.js`**: Added a new describe block
+  `broadcastEncounterPause / broadcastEncounterResume — socket wiring` with three integration
+  tests: socket emit verification for both helpers and a live renderer pause/resume state check.
+- **`DEVELOPER-README.md`**: Updated the *Encounter Zone Resolution* Mermaid sequence diagram to
+  include the `Socket` and `Player Clients` participants; updated the *Encounter animation pause*
+  design decision; updated the socket message table (removed `*(reserved)*` from both entries).
+- **`README.md`**: Updated the GM Guide encounter dialog description and the Notes section to
+  accurately describe the all-clients pause behaviour.
 
 ### Added — Documentation Overhaul
 
