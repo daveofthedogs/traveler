@@ -75,9 +75,13 @@ export function checkZones(zones, t, tPrev) {
     if (zone._triggered) continue;
 
     if (zone.type === "explicit" || zone.type === "fixed") {
-      // Fire once when the animation crosses zone.t
+      // Fire once when the animation crosses zone.t.
+      // Special case: zone at t=0 fires on the first real tick (tPrev===0, t>0).
       const zoneT = Number.isFinite(zone.t) ? zone.t : 0.5;
-      if (tPrev < zoneT && t >= zoneT) {
+      const crosses = zoneT === 0
+        ? (tPrev === 0 && t > 0)
+        : (tPrev < zoneT && t >= zoneT);
+      if (crosses) {
         zone._triggered = true;
         fired.push(zone);
       }
