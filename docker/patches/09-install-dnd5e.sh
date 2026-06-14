@@ -5,12 +5,17 @@
 ##
 set -euo pipefail
 
+finish() {
+  local code="${1:-0}"
+  [[ "${BASH_SOURCE[0]}" == "$0" ]] && exit "${code}" || return "${code}"
+}
+
 SYSDIR="/data/Data/systems/dnd5e"
 MANIFEST_URL="https://github.com/foundryvtt/dnd5e/releases/latest/download/system.json"
 
 if [[ -f "${SYSDIR}/system.json" ]]; then
   echo "[traveler-patch] dnd5e already present at ${SYSDIR}"
-  exit 0
+  finish 0
 fi
 
 echo "[traveler-patch] Installing dnd5e → ${SYSDIR}"
@@ -24,7 +29,7 @@ DOWNLOAD_URL="$(
 
 if [[ -z "${DOWNLOAD_URL}" ]]; then
   echo "[traveler-patch] ERROR: could not parse download URL from manifest" >&2
-  exit 1
+  finish 1
 fi
 
 echo "[traveler-patch] Downloading dnd5e from ${DOWNLOAD_URL}"
@@ -42,9 +47,15 @@ fi
 if [[ ! -f "${src}/system.json" ]]; then
   echo "[traveler-patch] ERROR: system.json not found after unzip" >&2
   find "${src}" -maxdepth 3 -type f | head -20 >&2 || true
-  exit 1
+  finish 1
 fi
 
 mkdir -p "${SYSDIR}"
 cp -a "${src}/." "${SYSDIR}/"
+
+if [[ ! -f "${SYSDIR}/system.json" ]]; then
+  echo "[traveler-patch] ERROR: install finished but ${SYSDIR}/system.json is missing" >&2
+  finish 1
+fi
+
 echo "[traveler-patch] dnd5e installed successfully."

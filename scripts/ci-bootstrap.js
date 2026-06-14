@@ -13,7 +13,7 @@
  *   node scripts/ci-bootstrap.js
  */
 
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,25 +34,34 @@ const QUENCH_ID    = "quench";
 // Docker helpers
 // ---------------------------------------------------------------------------
 
-function composeCommand(subcommand) {
-  const parts = ["docker", "compose"];
+function composeArgs(subcommand) {
+  const args = ["compose"];
   if (existsSync(ENV_FILE)) {
-    parts.push("--env-file", ENV_FILE);
+    args.push("--env-file", ENV_FILE);
   }
-  parts.push("-f", COMPOSE_FILE, ...subcommand);
-  return parts.join(" ");
+  args.push("-f", COMPOSE_FILE, ...subcommand);
+  return args;
 }
 
 function dockerExec(script) {
-  const cmd = composeCommand([
-    "exec", "-T", "foundry", "bash", "-lc", script
-  ]);
-  try {
-    return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: ROOT }).trim();
-  } catch (err) {
-    const detail = [err.stderr, err.stdout, err.message].filter(Boolean).join("\n").trim();
-    throw new Error(detail || "docker exec failed");
+  const args = composeArgs(["exec", "-T", "foundry", "bash", "-lc", script]);
+  const result = spawnSync("docker", args, {
+    encoding: "utf8",
+    cwd: ROOT,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  const stdout = result.stdout?.trim() ?? "";
+  const stderr = result.stderr?.trim() ?? "";
+
+  if (stdout) console.log(stdout);
+  if (stderr) console.error(stderr);
+
+  if (result.status !== 0) {
+    throw new Error(stderr || stdout || `docker exec failed (exit ${result.status})`);
   }
+
+  return stdout;
 }
 
 function pathExists(containerPath) {
