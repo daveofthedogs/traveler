@@ -130,9 +130,12 @@ async function poll() {
 
 try {
   const ready = await poll();
-  process.exit(ready ? 0 : 1);
+  process.exitCode = ready ? 0 : 1;
 } catch (err) {
   console.error(`[foundry-wait] Fatal: ${err.message}`);
   dumpContainerDiagnostics("fatal error");
-  process.exit(1);
+  process.exitCode = 1;
 }
+
+// Let libuv close fetch / docker exec handles before Node exits (avoids Windows crash).
+await new Promise((r) => setTimeout(r, 100));
