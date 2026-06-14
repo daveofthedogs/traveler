@@ -9,7 +9,7 @@
  * Registered by tests/quench/index.js.
  */
 
-import { SceneFixture, buildSceneFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture, integrationBatch } from "./fixtures.js";
 import { ProposalStore } from "../../scripts/proposals.js";
 import { PLAYER_ROUTE_MODE } from "../../scripts/settings.js";
 import { MSG } from "../../scripts/constants.js";
@@ -23,6 +23,7 @@ export function registerPlayerRouteTests(quench) {
     (context) => {
       const { describe, it, before, after, assert } = context;
 
+      integrationBatch(describe, () => {
       let ctx;
 
       before(async function() {
@@ -159,6 +160,7 @@ export function registerPlayerRouteTests(quench) {
           ProposalStore.clear();
           assert.equal(ProposalStore.size, 0);
         });
+      });
       });
     },
     { displayName: "Traveler: Player Pathfinding (integration)" }

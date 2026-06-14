@@ -5,6 +5,7 @@
  * These tests use real Foundry document APIs and the live socket.
  */
 
+import { integrationBatch } from "./fixtures.js";
 import {
   createParty,
   getParties,
@@ -18,6 +19,8 @@ import {
 export function registerPartyTests(quench) {
   quench.registerBatch("traveler.party", (context) => {
     const { describe, it, assert, before, after } = context;
+
+    integrationBatch(describe, () => {
 
     // -----------------------------------------------------------------------
     // Helpers
@@ -258,6 +261,7 @@ export function registerPartyTests(quench) {
           PartyCheckSession.remove(session.id);
         }
       });
+    });
     });
   });
 }

@@ -7,7 +7,7 @@
  *  - scene flag override is read by getSceneDistanceConfig
  */
 
-import { SceneFixture, buildSceneFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture, integrationBatch } from "./fixtures.js";
 import { computeTravelSeconds, formatTravelDuration, advanceClock } from "../../scripts/clock.js";
 import { getSceneDistanceConfig } from "../../scripts/settings.js";
 import { MODULE_ID } from "../../scripts/settings.js";
@@ -18,6 +18,7 @@ export function registerClockTests(quench) {
     (context) => {
       const { describe, it, before, after, assert } = context;
 
+      integrationBatch(describe, () => {
       let ctx;
 
       before(async function() {
@@ -123,6 +124,7 @@ export function registerClockTests(quench) {
 
           await canvas.scene.unsetFlag(MODULE_ID, "sceneDistance");
         });
+      });
       });
     },
     { displayName: "Traveler: World Clock & Scene Distance (integration)" }

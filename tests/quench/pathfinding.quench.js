@@ -7,7 +7,7 @@
  * Registered by tests/quench/index.js.
  */
 
-import { SceneFixture, buildSceneFixture, WallFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture, WallFixture, integrationBatch } from "./fixtures.js";
 import { findPath, isWallBlocked } from "../../scripts/pathfinding/astar.js";
 
 export function registerPathfindingTests(quench) {
@@ -16,6 +16,7 @@ export function registerPathfindingTests(quench) {
     (context) => {
       const { describe, it, expect, before, after, assert } = context;
 
+      integrationBatch(describe, () => {
       let ctx;
 
       before(async function() {
@@ -128,6 +129,7 @@ export function registerPathfindingTests(quench) {
           // A partial path is acceptable
           assert.ok(path.length >= 0, "should not throw on budget exhaustion");
         });
+      });
       });
     },
     { displayName: "Traveler: A* Pathfinding (integration)" }

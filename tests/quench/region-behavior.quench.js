@@ -9,7 +9,7 @@
  * Registered by tests/quench/index.js.
  */
 
-import { buildSceneFixture } from "./fixtures.js";
+import { buildSceneFixture, integrationBatch } from "./fixtures.js";
 import { TravelerChangeLevelBehavior } from "../../scripts/behaviors/change-level.js";
 
 export function registerRegionBehaviorTests(quench) {
@@ -18,6 +18,7 @@ export function registerRegionBehaviorTests(quench) {
     (context) => {
       const { describe, it, before, after, assert } = context;
 
+      integrationBatch(describe, () => {
       let ctx;
 
       before(async function() {
@@ -101,6 +102,7 @@ export function registerRegionBehaviorTests(quench) {
           // Restore
           await ctx.token.update({ elevation: initialElevation });
         });
+      });
       });
     },
     { displayName: "Traveler: Region Behavior (integration)" }

@@ -10,7 +10,7 @@
  * Registered by tests/quench/index.js.
  */
 
-import { SceneFixture, buildSceneFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture, integrationBatch } from "./fixtures.js";
 import {
   createEncounterZone,
   checkZones,
@@ -30,6 +30,7 @@ export function registerEncounterTests(quench) {
     (context) => {
       const { describe, it, before, after, assert } = context;
 
+      integrationBatch(describe, () => {
       let ctx;
 
       before(async function() {
@@ -210,6 +211,7 @@ export function registerEncounterTests(quench) {
           // rendered = false after close
           assert.ok(!dialog.rendered, "dialog should not be rendered after close");
         });
+      });
       });
     },
     { displayName: "Traveler: Encounter System (integration)" }

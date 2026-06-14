@@ -15,6 +15,19 @@
 export const QUENCH_TEST_TIMEOUT = 30_000;
 
 /**
+ * Wrap a Quench batch body in a root Mocha suite with a CI-safe timeout.
+ * Quench defaults to 2000ms per test; async Foundry document I/O often exceeds that on GHA.
+ * @param {Function} describe from Quench context
+ * @param {() => void} fn batch body (before/after/describe/it registrations)
+ */
+export function integrationBatch(describe, fn) {
+  describe("integration", function() {
+    this.timeout(180_000);
+    fn();
+  });
+}
+
+/**
  * Run SceneFixture.build with a Mocha timeout suited to Foundry document I/O.
  * @param {Mocha.Context} hook
  */
