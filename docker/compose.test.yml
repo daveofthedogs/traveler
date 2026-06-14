@@ -44,6 +44,8 @@ services:
       FOUNDRY_ADMIN_KEY:         "${FOUNDRY_ADMIN_KEY}"
       FOUNDRY_USERNAME:          "${FOUNDRY_USERNAME}"
       FOUNDRY_PASSWORD:          "${FOUNDRY_PASSWORD}"
+      FOUNDRY_RELEASE_URL:       "${FOUNDRY_RELEASE_URL:-}"
+      CONTAINER_VERBOSE:         "${CONTAINER_VERBOSE:-}"
       FOUNDRY_WORLD:             "traveler-ci"
       CONTAINER_PRESERVE_CONFIG: "true"
       FOUNDRY_RELEASE_CHANNEL:   "stable"
@@ -62,7 +64,7 @@ services:
 
     healthcheck:
       test:         ["CMD", "curl", "-sf", "http://localhost:30000/api/status"]
-      interval:     10s
-      timeout:      5s
-      retries:      18
-      start_period: 90s
+      interval:     15s
+      timeout:      10s
+      retries:      40
+      start_period: 600s

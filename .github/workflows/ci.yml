@@ -7,6 +7,7 @@
 ##   FOUNDRY_ADMIN_KEY    — admin panel password for the Docker container
 ##   FOUNDRY_USERNAME     — foundryvtt.com account email
 ##   FOUNDRY_PASSWORD     — foundryvtt.com account password
+##   FOUNDRY_RELEASE_URL  — (optional) presigned Foundry zip URL; skips foundryvtt.com login download
 ##
 
 name: CI
@@ -82,22 +83,25 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Write .env for Docker Compose
-        run: |
-          {
-            echo "FOUNDRY_LICENSE_KEY=${{ secrets.FOUNDRY_LICENSE_KEY }}"
-            echo "FOUNDRY_ADMIN_KEY=${{ secrets.FOUNDRY_ADMIN_KEY }}"
-            echo "FOUNDRY_USERNAME=${{ secrets.FOUNDRY_USERNAME }}"
-            echo "FOUNDRY_PASSWORD=${{ secrets.FOUNDRY_PASSWORD }}"
-          } > .env
+        run: node scripts/write-ci-env.js
+        env:
+          FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
+          FOUNDRY_ADMIN_KEY:   ${{ secrets.FOUNDRY_ADMIN_KEY }}
+          FOUNDRY_USERNAME:    ${{ secrets.FOUNDRY_USERNAME }}
+          FOUNDRY_PASSWORD:    ${{ secrets.FOUNDRY_PASSWORD }}
+          FOUNDRY_RELEASE_URL: ${{ secrets.FOUNDRY_RELEASE_URL }}
 
       - name: Start Foundry VTT (Docker)
         run: npm run foundry:up
+
+      - name: Show Foundry container status
+        run: docker compose --env-file .env -f docker/compose.test.yml ps -a
 
       - name: Wait for Foundry to be ready
         run: npm run foundry:wait
         env:
           FOUNDRY_URL:          http://localhost:30000
-          FOUNDRY_WAIT_TIMEOUT: "300"
+          FOUNDRY_WAIT_TIMEOUT: "600"
 
       - name: Bootstrap Foundry (install dnd5e, verify Quench)
         run: npm run foundry:bootstrap
