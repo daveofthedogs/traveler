@@ -13,9 +13,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, "feature/**"]
+    branches: [main, dev, party-system, "feature/**"]
   pull_request:
-    branches: [main]
+    branches: [main, party-system]
   workflow_dispatch:      # allow manual trigger from the Actions tab
 
 # ---------------------------------------------------------------------------
@@ -81,14 +81,17 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
-      - name: Start Foundry VTT (Docker)
+      - name: Write .env for Docker Compose
         run: |
-          docker compose -f docker/compose.test.yml up -d
-        env:
-          FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
-          FOUNDRY_ADMIN_KEY:   ${{ secrets.FOUNDRY_ADMIN_KEY }}
-          FOUNDRY_USERNAME:    ${{ secrets.FOUNDRY_USERNAME }}
-          FOUNDRY_PASSWORD:    ${{ secrets.FOUNDRY_PASSWORD }}
+          {
+            echo "FOUNDRY_LICENSE_KEY=${{ secrets.FOUNDRY_LICENSE_KEY }}"
+            echo "FOUNDRY_ADMIN_KEY=${{ secrets.FOUNDRY_ADMIN_KEY }}"
+            echo "FOUNDRY_USERNAME=${{ secrets.FOUNDRY_USERNAME }}"
+            echo "FOUNDRY_PASSWORD=${{ secrets.FOUNDRY_PASSWORD }}"
+          } > .env
+
+      - name: Start Foundry VTT (Docker)
+        run: npm run foundry:up
 
       - name: Wait for Foundry to be ready
         run: npm run foundry:wait
@@ -111,11 +114,11 @@ jobs:
 
       - name: Dump Foundry logs on failure
         if: failure()
-        run: docker compose -f docker/compose.test.yml logs --tail=200 foundry || true
+        run: docker compose --env-file .env -f docker/compose.test.yml logs --tail=200 foundry || true
 
       - name: Stop Foundry
         if: always()
-        run: docker compose -f docker/compose.test.yml down -v
+        run: npm run foundry:down:clean
 
       - name: Upload Playwright traces on failure
         if: failure()

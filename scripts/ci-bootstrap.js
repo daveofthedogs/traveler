@@ -14,6 +14,9 @@
  */
 
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   BASE_URL,
   launchBrowser,
@@ -22,25 +25,49 @@ import {
   releaseWorldSession
 } from "./foundry-playwright.js";
 
+const ROOT         = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const COMPOSE_FILE = "docker/compose.test.yml";
+const ENV_FILE     = resolve(ROOT, ".env");
 const QUENCH_ID    = "quench";
 
 // ---------------------------------------------------------------------------
 // Docker helpers
 // ---------------------------------------------------------------------------
 
+function composeCommand(subcommand) {
+  const parts = ["docker", "compose"];
+  if (existsSync(ENV_FILE)) {
+    parts.push("--env-file", ENV_FILE);
+  }
+  parts.push("-f", COMPOSE_FILE, ...subcommand);
+  return parts.join(" ");
+}
+
 function dockerExec(script) {
-  const cmd =
-    `docker compose --env-file .env -f ${COMPOSE_FILE} exec -T foundry bash -lc ` +
-    JSON.stringify(script);
-  return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const cmd = composeCommand([
+    "exec", "-T", "foundry", "bash", "-lc", script
+  ]);
+  try {
+    return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: ROOT }).trim();
+  } catch (err) {
+    const detail = [err.stderr, err.stdout, err.message].filter(Boolean).join("\n").trim();
+    throw new Error(detail || "docker exec failed");
+  }
 }
 
 function pathExists(containerPath) {
   try {
     dockerExec(`test -e ${containerPath}`);
     return true;
-  } catch {
+  } catch (err) {
+    const detail = err.message ?? "";
+    if (/couldn't find env file|is not running|no such service|no such container/i.test(detail)) {
+      throw new Error(
+        `Cannot reach Foundry container (${detail}). ` +
+        "Ensure `npm run foundry:up` completed and, in CI, write a project-root `.env` " +
+        "before bootstrap (see .github/workflows/ci.yml)."
+      );
+    }
     return false;
   }
 }
@@ -49,16 +76,24 @@ function pathExists(containerPath) {
 // Package verification (installed by container patches at boot)
 // ---------------------------------------------------------------------------
 
-function verifyDnd5e() {
+function ensureDnd5e() {
   const systemJson = "/data/Data/systems/dnd5e/system.json";
+  if (pathExists(systemJson)) {
+    console.log("[ci-bootstrap] dnd5e system present ✓");
+    return;
+  }
+
+  console.log("[ci-bootstrap] dnd5e missing — running docker/patches/09-install-dnd5e.sh …");
+  dockerExec("bash /data/container_patches/09-install-dnd5e.sh");
+
   if (!pathExists(systemJson)) {
     throw new Error(
-      "dnd5e not found at /data/Data/systems/dnd5e. " +
-      "Restart the container so docker/patches/09-install-dnd5e.sh runs " +
-      "(npm run foundry:down:clean && npm run foundry:up)."
+      "dnd5e not found at /data/Data/systems/dnd5e after install patch. " +
+      "Check container logs for curl/unzip errors " +
+      "(npm run foundry:logs or docker compose logs foundry)."
     );
   }
-  console.log("[ci-bootstrap] dnd5e system present ✓");
+  console.log("[ci-bootstrap] dnd5e installed ✓");
 }
 
 function verifyQuench() {
@@ -103,7 +138,7 @@ async function verifyWorldModules(page) {
 async function main() {
   console.log(`[ci-bootstrap] Bootstrapping Foundry at ${BASE_URL}`);
 
-  verifyDnd5e();
+  ensureDnd5e();
   verifyQuench();
 
   const browser = await launchBrowser();
