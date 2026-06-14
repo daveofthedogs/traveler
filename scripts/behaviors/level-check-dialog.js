@@ -1,4 +1,5 @@
 import { MODULE_ID } from "../settings.js";
+import { CHANNEL, MSG } from "../constants.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -54,17 +55,24 @@ export class TravelerLevelCheckDialog extends HandlebarsApplicationMixin(Applica
 
   /**
    * @param {object} options
-   * @param {TravelerChangeLevelBehavior} options.behavior
-   * @param {TokenDocument} options.tokenDoc
+   * @param {TravelerChangeLevelBehavior|object} options.behavior  Behavior or check-config object
+   * @param {TokenDocument}                      options.tokenDoc
+   * @param {string|null}  [options.partySessionId]  When set, result is submitted via socket
+   *                                                  to the GM rather than resolved locally.
+   * @param {string|null}  [options.partyActorId]    Actor ID to include in the socket result.
    */
   constructor(options = {}) {
     super(options);
-    /** @type {import("./change-level.js").TravelerChangeLevelBehavior} */
-    this.behavior = options.behavior;
+    /** @type {import("./change-level.js").TravelerChangeLevelBehavior|object} */
+    this.behavior        = options.behavior;
     /** @type {TokenDocument} */
-    this.tokenDoc = options.tokenDoc;
+    this.tokenDoc        = options.tokenDoc;
+    /** @type {string|null} — non-null when this dialog was triggered by a party check */
+    this.partySessionId  = options.partySessionId ?? null;
+    /** @type {string|null} */
+    this.partyActorId    = options.partyActorId   ?? null;
 
-    /** Public promise resolved when the player acts. */
+    /** Public promise resolved when the player acts (individual mode only). */
     this.promise = new Promise((resolve) => {
       this._resolve = resolve;
     });
@@ -127,19 +135,45 @@ export class TravelerLevelCheckDialog extends HandlebarsApplicationMixin(Applica
       });
     } catch (err) {
       console.error("Traveler | Level check roll failed:", err);
-      this._settle({ success: false, roll: null, cancelled: true });
+      this._submitResult({ success: false, roll: null, cancelled: true });
       this.close();
       return;
     }
 
     const success = roll.total >= (b?.checkDC ?? 10);
-    this._settle({ success, roll, cancelled: false });
+    this._submitResult({ success, roll, cancelled: false });
     this.close();
   }
 
   _onGiveUp() {
-    this._settle({ success: false, roll: null, cancelled: true });
+    this._submitResult({ success: false, roll: null, cancelled: true });
     this.close();
+  }
+
+  /**
+   * Route the result either to the local promise (individual mode) or back to
+   * the GM via socket (party mode).
+   * @param {{ success: boolean, roll: Roll|null, cancelled: boolean }} result
+   */
+  _submitResult(result) {
+    if (this.partySessionId) {
+      // Party mode — emit to GM
+      game.socket.emit(CHANNEL, {
+        type: MSG.PARTY_CHECK_RESULT,
+        payload: {
+          sessionId: this.partySessionId,
+          actorId:   this.partyActorId,
+          userId:    game.user.id,
+          total:     result.roll?.total ?? null,
+          passed:    result.success,
+          cancelled: result.cancelled
+        }
+      });
+      // Also resolve the local promise so the dialog can close cleanly.
+      this._settle(result);
+    } else {
+      this._settle(result);
+    }
   }
 
   // -----------------------------------------------------------------------

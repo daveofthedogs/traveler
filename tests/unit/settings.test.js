@@ -2,14 +2,23 @@
  * Unit tests for pure settings helpers (scripts/settings.js).
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   normalizeSettings,
   applyColorNumbers,
   applyMapScaling,
   DEFAULTS,
+  DEFAULT_TRAVEL_MODES,
   PLAYER_ROUTE_MODE,
-  getPlayerRouteMode
+  getPlayerRouteMode,
+  getTravelModes,
+  getTravelModeById,
+  getSceneDistanceConfig,
+  getSettings,
+  getStageScale,
+  getCameraScaleForPath,
+  getMapPixelSize,
+  getViewPixelSizeForScale
 } from "../../scripts/settings.js";
 
 // ---------------------------------------------------------------------------
@@ -58,8 +67,23 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ ...DEFAULTS, levelId: null }).levelId).toBeNull();
   });
 
-  it("preserves levelId string", () => {
-    expect(normalizeSettings({ ...DEFAULTS, levelId: "abc123" }).levelId).toBe("abc123");
+  it("defaults defaultElevation to 0 when missing", () => {
+    const { defaultElevation, ...rest } = DEFAULTS;
+    expect(normalizeSettings(rest).defaultElevation).toBe(0);
+  });
+
+  it("preserves explicit defaultElevation", () => {
+    expect(normalizeSettings({ ...DEFAULTS, defaultElevation: 12 }).defaultElevation).toBe(12);
+  });
+
+  it("defaults travelMode to none when missing", () => {
+    const { travelMode, ...rest } = DEFAULTS;
+    expect(normalizeSettings(rest).travelMode).toBe("none");
+  });
+
+  it("defaults labelFollowPath to true when undefined", () => {
+    const { labelFollowPath, ...rest } = DEFAULTS;
+    expect(normalizeSettings(rest).labelFollowPath).toBe(true);
   });
 });
 
@@ -152,5 +176,169 @@ describe("getPlayerRouteMode", () => {
     game.settings.get = () => "approval";
     expect(getPlayerRouteMode()).toBe("approval");
     game.settings.get = () => "off";
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTravelModes / getTravelModeById
+// ---------------------------------------------------------------------------
+
+describe("getTravelModes", () => {
+  it("returns defaults when setting is empty", () => {
+    game.settings.get = () => [];
+    const modes = getTravelModes();
+    expect(modes.length).toBe(DEFAULT_TRAVEL_MODES.length);
+    expect(modes[0].id).toBe(DEFAULT_TRAVEL_MODES[0].id);
+  });
+
+  it("returns a deep clone of configured modes", () => {
+    const custom = [{ id: "custom", label: "Custom", speedMph: 10 }];
+    game.settings.get = () => custom;
+    const modes = getTravelModes();
+    expect(modes).toEqual(custom);
+    expect(modes).not.toBe(custom);
+  });
+});
+
+describe("getTravelModeById", () => {
+  beforeEach(() => {
+    game.settings.get = vi.fn((mod, key) => {
+      if (key === "travelModes") return undefined;
+      return undefined;
+    });
+  });
+
+  it("returns undefined for null or none", () => {
+    expect(getTravelModeById(null)).toBeUndefined();
+    expect(getTravelModeById("none")).toBeUndefined();
+  });
+
+  it("finds a mode by id", () => {
+    expect(getTravelModeById("horseback")?.label).toBe("Horseback");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSceneDistanceConfig
+// ---------------------------------------------------------------------------
+
+describe("getSceneDistanceConfig", () => {
+  it("uses scene flag override when enabled", () => {
+    const scene = {
+      getFlag: () => ({ enabled: true, distancePerSquare: 100, units: "miles" }),
+      grid: { distance: 5, units: "ft" }
+    };
+    const cfg = getSceneDistanceConfig(scene);
+    expect(cfg.distancePerSquare).toBe(100);
+    expect(cfg.units).toBe("miles");
+    expect(cfg.overridden).toBe(true);
+  });
+
+  it("falls back to scene grid distance", () => {
+    const scene = {
+      getFlag: () => null,
+      grid: { distance: 5, units: "ft" }
+    };
+    const cfg = getSceneDistanceConfig(scene);
+    expect(cfg.distancePerSquare).toBe(5);
+    expect(cfg.units).toBe("ft");
+    expect(cfg.overridden).toBe(false);
+  });
+
+  it("defaults to 1 when scene is null", () => {
+    const cfg = getSceneDistanceConfig(null);
+    expect(cfg.distancePerSquare).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSettings / getStageScale / getCameraScaleForPath / getMapPixelSize
+// ---------------------------------------------------------------------------
+
+describe("getSettings", () => {
+  it("returns settings with colour numbers applied", () => {
+    game.settings.get = () => ({ ...DEFAULTS, lineColor: "#ff0000" });
+    const s = getSettings();
+    expect(s.lineColorNum).toBe(0xff0000);
+  });
+});
+
+describe("getStageScale", () => {
+  it("returns stage scale when available", () => {
+    canvas.stage = { scale: { x: 1.5 } };
+    expect(getStageScale()).toBe(1.5);
+  });
+
+  it("falls back to worldTransform.a", () => {
+    canvas.stage = { worldTransform: { a: 0.8 } };
+    expect(getStageScale()).toBe(0.8);
+  });
+});
+
+describe("getViewPixelSizeForScale", () => {
+  it("returns null when screen is unavailable", () => {
+    canvas.app.renderer.screen = null;
+    expect(getViewPixelSizeForScale(1)).toBeNull();
+  });
+
+  it("computes view size from screen and scale", () => {
+    canvas.app.renderer.screen = { width: 1920, height: 1080 };
+    const size = getViewPixelSizeForScale(2);
+    expect(size.width).toBe(960);
+    expect(size.height).toBe(540);
+  });
+});
+
+describe("getMapPixelSize", () => {
+  it("returns null when scene is missing", () => {
+    const saved = canvas.scene;
+    canvas.scene = null;
+    expect(getMapPixelSize()).toBeNull();
+    canvas.scene = saved;
+  });
+
+  it("uses view size when screen is available", () => {
+    canvas.app.renderer.screen = { width: 1920, height: 1080 };
+    canvas.stage = { scale: { x: 1 } };
+    const size = getMapPixelSize();
+    expect(size).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it("falls back to scene dimensions", () => {
+    canvas.app.renderer.screen = null;
+    canvas.scene = {
+      ...canvas.scene,
+      dimensions: { sceneWidth: 4000, sceneHeight: 3000 }
+    };
+    const size = getMapPixelSize();
+    expect(size).toEqual({ width: 4000, height: 3000 });
+  });
+});
+
+describe("getCameraScaleForPath", () => {
+  beforeEach(() => {
+    canvas.app.renderer.screen = { width: 1920, height: 1080 };
+    canvas.scene = {
+      ...canvas.scene,
+      width: 4000,
+      height: 3000,
+      dimensions: { sceneWidth: 4000, sceneHeight: 3000 }
+    };
+  });
+
+  it("returns null when totalLen is zero", () => {
+    expect(getCameraScaleForPath(0)).toBeNull();
+  });
+
+  it("returns a scale clamped between min and max", () => {
+    const scale = getCameraScaleForPath(5000);
+    expect(scale).toBeGreaterThanOrEqual(0.2);
+    expect(scale).toBeLessThanOrEqual(3);
+  });
+
+  it("returns larger scale for shorter paths", () => {
+    const short = getCameraScaleForPath(500);
+    const long  = getCameraScaleForPath(50000);
+    expect(short).toBeGreaterThan(long);
   });
 });

@@ -1,4 +1,11 @@
 import { TravelerLevelCheckDialog } from "./level-check-dialog.js";
+import {
+  getPartyForToken,
+  getPartyMemberUsers,
+  resolvePartyCheck,
+  PartyCheckSession
+} from "../party.js";
+import { CHANNEL, MSG } from "../constants.js";
 
 /**
  * A custom RegionBehaviorType that intercepts token movement into a region and
@@ -218,9 +225,9 @@ export class TravelerChangeLevelBehavior extends foundry.data.regionBehaviors.Re
    * Handles TOKEN_MOVE_IN:
    *   1. Only acts on the client of the user who initiated the movement.
    *   2. Pauses movement at the region boundary.
-   *   3. Checks prerequisites (status effect, item).
-   *   4. Optionally shows a roll-check dialog in a retry loop.
-   *   5. Either continues movement + sets elevation, or stops the token.
+   *   3. Detects whether the token is a party token — if so delegates to
+   *      `_handlePartyMoveIn` for the multi-user check protocol.
+   *   4. Otherwise runs the standard individual check flow.
    *
    * @param {RegionEvent} event
    */
@@ -230,18 +237,22 @@ export class TravelerChangeLevelBehavior extends foundry.data.regionBehaviors.Re
     const tokenDoc = event.data?.token;
     if (!tokenDoc) return;
 
-    const movementId = event.data?.movement?.id;
-
-    // Use the RegionBehavior's UUID as a stable, unique continuation key.
+    const movementId  = event.data?.movement?.id;
     const continueKey = this.parent?.uuid ?? foundry.utils.randomID();
 
-    // Pause movement at the region boundary; null means the pause was rejected.
     const paused = tokenDoc.pauseMovement?.(continueKey);
     if (!paused) return;
 
+    // ---- Party token path (GM only) -------------------------------------
+    const party = getPartyForToken(tokenDoc);
+    if (party && game.user.isGM) {
+      await this._handlePartyMoveIn(party, tokenDoc, movementId, continueKey);
+      return;
+    }
+
+    // ---- Individual token path ------------------------------------------
     const actor = tokenDoc.actor;
 
-    // Gate on prerequisites first — no dialog shown for these.
     const prereq = this._checkPrerequisites(actor);
     if (!prereq.met) {
       tokenDoc.stopMovement?.(movementId);
@@ -249,14 +260,12 @@ export class TravelerChangeLevelBehavior extends foundry.data.regionBehaviors.Re
       return;
     }
 
-    // Automatic pass — no roll required.
     if (!this.requiresCheck) {
       tokenDoc.continueMovement?.(movementId, continueKey);
       await this._applyElevation(tokenDoc);
       return;
     }
 
-    // Roll-check loop — movement stays paused across retries.
     let passed = false;
     let runLoop = true;
 
@@ -295,5 +304,126 @@ export class TravelerChangeLevelBehavior extends foundry.data.regionBehaviors.Re
     } else {
       tokenDoc.stopMovement?.(movementId);
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Party check protocol
+  // -----------------------------------------------------------------------
+
+  /**
+   * Orchestrate a multi-user check when the token is a party token.
+   * Only runs on the GM client.
+   *
+   * @param {PartyRecord}    party
+   * @param {TokenDocument}  tokenDoc
+   * @param {string}         movementId
+   * @param {string}         continueKey
+   */
+  async _handlePartyMoveIn(party, tokenDoc, movementId, continueKey) {
+    const members = getPartyMemberUsers(party);
+
+    // Automatic pass for non-check behaviors — still apply elevation.
+    if (!this.requiresCheck) {
+      tokenDoc.continueMovement?.(movementId, continueKey);
+      await this._applyElevation(tokenDoc);
+      return;
+    }
+
+    if (!members.length) {
+      // No online party members — fall back to individual check on the party token actor.
+      const actor = tokenDoc.actor;
+      const prereq = this._checkPrerequisites(actor);
+      if (!prereq.met) {
+        tokenDoc.stopMovement?.(movementId);
+        ui.notifications.warn(`Traveler | ${prereq.reason}`);
+        return;
+      }
+      // GM rolls on behalf of the party with no members online.
+      const dialog = new TravelerLevelCheckDialog({ behavior: this, tokenDoc });
+      dialog.render({ force: true });
+      const result = await dialog.promise;
+      if (result.success) {
+        tokenDoc.continueMovement?.(movementId, continueKey);
+        await this._applyElevation(tokenDoc);
+      } else {
+        tokenDoc.stopMovement?.(movementId);
+      }
+      return;
+    }
+
+    const checkConfig = {
+      label:         this.checkLabel     || "Traversal Check",
+      formula:       this.checkFormula   || "1d20",
+      dc:            this.checkDC        ?? 10,
+      failureDamage: this.failureDamage  || "",
+      allowRetry:    this.allowRetry     ?? false
+    };
+
+    // Create session and broadcast requests to each member's user.
+    const session = PartyCheckSession.create({
+      partyId:     party.id,
+      party,
+      members,
+      checkConfig,
+      tokenDocId:  tokenDoc.id,
+      movementId,
+      continueKey
+    });
+
+    for (const member of members) {
+      game.socket.emit(CHANNEL, {
+        type: MSG.PARTY_CHECK_REQUEST,
+        payload: {
+          sessionId:   session.id,
+          userId:      member.userId,
+          actorId:     member.actorId,
+          checkConfig
+        }
+      });
+    }
+
+    // Show the GM a live roll-collection dialog.
+    const { PartyCheckCollector } = await import("../apps/party-check-collector.js");
+    const collector = new PartyCheckCollector({ session });
+    collector.render({ force: true });
+
+    // Store collector on session so the socket handler can refresh it.
+    session._collector = collector;
+
+    // Await all results (or GM force-resolves).
+    const participants = await session.promise;
+    collector.close();
+    PartyCheckSession.remove(session.id);
+
+    const passed = resolvePartyCheck(
+      participants,
+      party.resolutionMode,
+      party.designatedActorId
+    );
+
+    if (passed) {
+      tokenDoc.continueMovement?.(movementId, continueKey);
+      await this._applyElevation(tokenDoc);
+    } else {
+      tokenDoc.stopMovement?.(movementId);
+      // Apply failure damage to every member who failed.
+      for (const p of participants) {
+        if (!p.passed && !p.cancelled) {
+          const actor = game.actors?.get(p.actorId);
+          if (actor) await this._applyFailureDamage(actor);
+        }
+      }
+    }
+
+    // Broadcast result summary to chat.
+    const resultLabel = passed ? "✅ Party passes" : "❌ Party blocked";
+    const rows = participants.map((p) => {
+      const mark = p.passed ? "✅" : (p.cancelled ? "🚫" : "❌");
+      return `<li>${mark} ${p.actorName}: ${p.total ?? "—"} vs DC ${checkConfig.dc}</li>`;
+    }).join("");
+    ChatMessage.create({
+      content: `<strong>Traveler — ${checkConfig.label}</strong><br>${resultLabel}<ul>${rows}</ul>`,
+      speaker: { alias: "Traveler" }
+    });
   }
 }

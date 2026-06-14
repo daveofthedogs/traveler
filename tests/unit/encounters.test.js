@@ -13,7 +13,13 @@ import {
   resetZoneTriggers,
   buildFixedResult,
   broadcastEncounterPause,
-  broadcastEncounterResume
+  broadcastEncounterResume,
+  rollTable,
+  createChatMessage,
+  importActor,
+  spawnToken,
+  openFixedJournal,
+  createNote
 } from "../../scripts/encounters.js";
 
 // ---------------------------------------------------------------------------
@@ -276,5 +282,143 @@ describe("broadcastEncounterResume", () => {
     broadcastEncounterResume("r1");
     const resumeType = game.socket.emit.mock.calls[0][1].type;
     expect(pauseType).not.toBe(resumeType);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rollTable / createChatMessage / resolveEncounter
+// ---------------------------------------------------------------------------
+
+describe("rollTable", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns null when tableId is empty", async () => {
+    expect(await rollTable("")).toBeNull();
+  });
+
+  it("returns null and warns when table is not found", async () => {
+    game.tables = { get: vi.fn(() => null) };
+    ui.notifications.warn = vi.fn();
+    expect(await rollTable("missing")).toBeNull();
+    expect(ui.notifications.warn).toHaveBeenCalled();
+  });
+
+  it("returns normalised result from a world actor draw", async () => {
+    const drawResult = {
+      results: [{
+        type: 2,
+        documentId: "actor-1",
+        text: "Goblin",
+        img: "goblin.png"
+      }]
+    };
+    game.tables = {
+      get: vi.fn(() => ({
+        name: "Forest Encounters",
+        draw: vi.fn(async () => drawResult)
+      }))
+    };
+    game.actors = {
+      get: vi.fn(() => ({ name: "Goblin", img: "goblin.png" }))
+    };
+    const result = await rollTable("table-1");
+    expect(result.name).toBe("Goblin");
+    expect(result.actorId).toBe("actor-1");
+    expect(result.tableName).toBe("Forest Encounters");
+  });
+});
+
+describe("createChatMessage", () => {
+  it("posts a chat message with encounter details", async () => {
+    ChatMessage.create = vi.fn(async () => {});
+    await createChatMessage(
+      { name: "Wolf", img: "wolf.png", tableName: "Forest" },
+      { environment: "Forest" }
+    );
+    expect(ChatMessage.create).toHaveBeenCalled();
+    const content = ChatMessage.create.mock.calls[0][0].content;
+    expect(content).toMatch(/Wolf/);
+    expect(content).toMatch(/Forest/);
+  });
+});
+
+describe("importActor", () => {
+  it("returns existing world actor by actorId", async () => {
+    const actor = { id: "a1", name: "Goblin" };
+    game.actors = { get: vi.fn(() => actor), find: vi.fn() };
+    const result = await importActor({ actorId: "a1" });
+    expect(result).toBe(actor);
+  });
+
+  it("returns null when compendium info is missing", async () => {
+    expect(await importActor({ name: "X" })).toBeNull();
+  });
+
+  it("reuses an existing actor in the Random Encounters folder", async () => {
+    const folder = { id: "f1" };
+    const existing = { id: "a2", name: "Orc", folder };
+    game.folders = { find: vi.fn(() => folder) };
+    game.actors = {
+      get: vi.fn(),
+      find: vi.fn((fn) => (fn(existing) ? existing : null))
+    };
+    const result = await importActor({
+      name: "Orc",
+      packId: "pack.monsters",
+      packDocId: "doc1"
+    });
+    expect(result).toBe(existing);
+  });
+});
+
+describe("spawnToken", () => {
+  it("returns null when actor or pos is missing", async () => {
+    expect(await spawnToken(null, { x: 0, y: 0 })).toBeNull();
+    expect(await spawnToken({ id: "a" }, null)).toBeNull();
+  });
+
+  it("creates a token offset from the party position", async () => {
+    const actor = {
+      getTokenDocument: vi.fn(async () => ({
+        toObject: () => ({ name: "Goblin" })
+      }))
+    };
+    canvas.scene = {
+      ...canvas.scene,
+      createEmbeddedDocuments: vi.fn(async () => [{ id: "tok1" }])
+    };
+    const token = await spawnToken(actor, { x: 100, y: 200 });
+    expect(token?.id).toBe("tok1");
+    expect(actor.getTokenDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 250, y: 200 })
+    );
+  });
+});
+
+describe("openFixedJournal", () => {
+  it("opens the journal sheet when journalId is set", async () => {
+    const render = vi.fn();
+    game.journal = {
+      get: vi.fn(() => ({ sheet: { render } }))
+    };
+    await openFixedJournal({ journalId: "j1" });
+    expect(render).toHaveBeenCalledWith(true);
+  });
+
+  it("is a no-op when journalId is absent", async () => {
+    game.journal = { get: vi.fn() };
+    await openFixedJournal({});
+    expect(game.journal.get).not.toHaveBeenCalled();
+  });
+});
+
+describe("createNote", () => {
+  it("returns null when canvas scene is unavailable", async () => {
+    const saved = canvas.scene;
+    canvas.scene = null;
+    expect(await createNote({ name: "X" }, { x: 0, y: 0 })).toBeNull();
+    canvas.scene = saved;
   });
 });

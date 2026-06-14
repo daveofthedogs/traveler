@@ -1,13 +1,11 @@
 {
   "id": "traveler",
-  "title": "traveler",
+  "title": "Traveler",
   "description": "Adds route-drawing tool and shared animation with configurable settings.",
-  "version": "#{VERSION}#",
+  "version": "2.0.0",
   "authors": [{ "name": "daveofthedogs" }],
   "compatibility": { "minimum": "13", "verified": "14" },
   "socket": true,
-  "url": "#{URL}#",
-  "manifest": "#{MANIFEST}#",
-  "download": "#{DOWNLOAD}#",
+  "url": "https://github.com/daveofthedogs/traveler",
   "esmodules": ["scripts/traveler.js"]
 }

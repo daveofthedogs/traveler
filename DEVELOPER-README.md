@@ -46,11 +46,13 @@ traveler/
 │   │   ├── encounter-dialog.js   EncounterDialog — GM Accept/Regen/Decline
 │   │   ├── player-speed-dialog.js PlayerSpeedDialog — speed picker before proposal
 │   │   ├── scene-settings.js     SceneSettingsDialog — distance override
+│   │   ├── party-config.js       PartyConfigApp — manage party groups
+│   │   ├── party-check-collector.js  PartyCheckCollector — GM live roll display
 │   │   ├── travel-modes.js       IndyRouteTravelModesApp — travel mode list editor
 │   │   └── currencies.js         IndyRouteCurrenciesApp — currency conversion editor
 │   ├── behaviors/
 │   │   ├── change-level.js       TravelerChangeLevelBehavior (RegionBehaviorType)
-│   │   └── level-check-dialog.js TravelerLevelCheckDialog — skill check dialog
+│   │   └── level-check-dialog.js TravelerLevelCheckDialog — individual & party check dialog
 │   └── pathfinding/
 │       ├── astar.js              Grid A* with binary min-heap priority queue
 │       └── fog-checker.js        Fog-of-war / vision cell check helpers
@@ -62,6 +64,7 @@ traveler/
 │   │   ├── change-level.test.js
 │   │   ├── clock.test.js
 │   │   ├── encounters.test.js
+│   │   ├── party.test.js
 │   │   ├── player-speed.test.js
 │   │   ├── proposals.test.js
 │   │   └── settings.test.js
@@ -71,6 +74,7 @@ traveler/
 │   │   ├── pathfinding.quench.js
 │   │   ├── region-behavior.quench.js
 │   │   ├── player-route.quench.js
+│   │   ├── party.quench.js
 │   │   ├── encounters.quench.js
 │   │   └── clock.quench.js
 │   └── world/
@@ -233,6 +237,23 @@ This means players see their token freeze mid-route, the GM resolves the encount
 everyone resumes together. The NPC token and Note created on "accept" appear on all clients via
 normal Foundry document creation.
 
+### Party token — multi-user check protocol
+
+When a **party token** (a single token representing the whole group) enters a level-change region,
+the module disperses roll-check dialogs to every party member's client instead of showing one
+dialog to whoever owns the token. The protocol:
+
+1. GM's `_handleMoveIn` detects the party via `getPartyForToken(tokenDoc)`.
+2. A `PartyCheckSession` is created (in-memory, GM client only) with one participant per member.
+3. `PARTY_CHECK_REQUEST` is emitted via socket to each member's `userId`.
+4. The GM sees a `PartyCheckCollector` dialog showing live roll statuses.
+5. Each player receives the request, their `TravelerLevelCheckDialog` opens with `partySessionId`
+   set — on submit the dialog emits `PARTY_CHECK_RESULT` back to the GM instead of resolving locally.
+6. The GM's socket handler calls `session.addResult()` and calls `collector.refresh()`.
+7. When all results are in (or GM clicks **Force Resolve**), `resolvePartyCheck()` is called.
+8. Pass → `continueMovement` + elevation update; Fail → `stopMovement` + damage to each failed actor.
+9. A chat message summarises every individual roll result.
+
 ### Per-scene distance override vs. Foundry grid
 
 Foundry's `canvas.scene.grid.distance` is designed for combat (e.g. "5 ft per square"). Overland
@@ -331,6 +352,43 @@ destination.
 }
 ```
 
+### Party record (stored in world setting `traveler.parties`, type Array)
+
+```js
+{
+  id:                 string,   // randomID()
+  name:               string,
+  partyTokenActorId:  string,   // actorId of the shared party token on the map
+  memberActorIds:     string[], // individual character actor IDs
+  resolutionMode:     "all" | "best" | "majority" | "designated",
+  designatedActorId:  string | null,
+  travelPaceMode:     "slowest" | "average" | "fastest"
+}
+```
+
+### PartyCheckSession (in-memory only, GM client, PartyCheckSession store)
+
+```js
+{
+  id:           string,
+  partyId:      string,
+  party:        PartyRecord,
+  checkConfig:  { label, formula, dc, failureDamage, allowRetry },
+  tokenDocId:   string,
+  movementId:   string,
+  continueKey:  string,
+  participants: [{
+    actorId, userId, actorName,
+    status:    "pending" | "rolled" | "timeout",
+    total:     number | null,
+    passed:    boolean | null,
+    cancelled: boolean
+  }],
+  resolved:     boolean,
+  promise:      Promise  // resolves when all participants have responded
+}
+```
+
 ---
 
 ## Socket Communication
@@ -348,9 +406,9 @@ All messages use channel `module.traveler`.
 | `PLAYER_REJECT` | GM → player | `{ proposalId }` | Player receives rejection notification |
 | `ENCOUNTER_PAUSE` | GM → all | `{ routeId }` | All clients freeze the named route's animation |
 | `ENCOUNTER_RESUME` | GM → all | `{ routeId }` | All clients resume the named route's animation |
-
-> `ENCOUNTER_PAUSE` / `ENCOUNTER_RESUME` are defined but not currently used. The encounter dialog
-> only pauses the GM's local animation, which is sufficient for the current UX.
+| `PARTY_CHECK_REQUEST` | GM → specific player | `{ sessionId, userId, actorId, checkConfig }` | Player opens level-check dialog for their character |
+| `PARTY_CHECK_RESULT` | player → GM | `{ sessionId, actorId, userId, total, passed, cancelled }` | GM session records individual roll result |
+| `PARTY_CHECK_RESOLVED` | GM → all | (future) | Broadcasts final party decision for chat summary |
 
 ---
 
@@ -439,29 +497,34 @@ documents. Teardown is skipped when `window.TRAVELER_KEEP_WORLD === true` (inspe
 Copy-Item .env.example .env
 # edit .env with your FOUNDRY_LICENSE_KEY, FOUNDRY_ADMIN_KEY, FOUNDRY_USERNAME, FOUNDRY_PASSWORD
 
-# 2. Start Foundry in Docker
-npm run foundry:up        # docker compose -f docker/compose.test.yml up -d
+# 2. Install dependencies and Playwright browser (one-time)
+npm ci
+npm run playwright:install
 
-# 3. Wait for Foundry to finish initialising (~2-3 min on first run)
+# 3. Start Foundry in Docker
+npm run foundry:up
+
+# 4. Wait for Foundry to finish initialising (~2-3 min on first run)
 npm run foundry:wait
 
-# 4. Install the Quench module inside Foundry (first time only)
-# Navigate to http://localhost:30000, log in, Settings → Add-on Modules → Install Quench
+# 5. Bootstrap dependencies (verify dnd5e + Quench, join CI world)
+# dnd5e and Quench are auto-installed via docker/patches/ at container start.
+npm run foundry:bootstrap
 
-# 5. Run integration tests
+# 6. Run integration tests
 npm run test:integration
 
-# 6. (Optional) inspect mode — keeps test data in the world
+# 7. (Optional) inspect mode — keeps test data in the world
 npm run test:inspect
 # Then open http://localhost:30000 and log in as GM
 
-# 7. Reset world data when done inspecting
+# 8. Reset world data when done inspecting
 npm run world:clean
 
-# 8. Stop the container
+# 9. Stop the container
 npm run foundry:down
 
-# 9. Full reset (also wipes named volume — requires re-activation)
+# 10. Full reset (also wipes named volume — requires re-activation)
 npm run foundry:down:clean
 ```
 

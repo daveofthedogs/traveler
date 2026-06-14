@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { scaleDrawSpeed } from "../../scripts/apps/player-speed-dialog.js";
+import { scaleDrawSpeed, PlayerSpeedDialog } from "../../scripts/apps/player-speed-dialog.js";
 import { DEFAULT_TRAVEL_MODES, getTravelModeById } from "../../scripts/settings.js";
 
 // ---------------------------------------------------------------------------
@@ -145,5 +145,33 @@ describe("encounter chance scaling math", () => {
 
   it("result never goes below 0", () => {
     expect(applyMult(0.3, -1)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PlayerSpeedDialog (ApplicationV2)
+// ---------------------------------------------------------------------------
+
+describe("PlayerSpeedDialog", () => {
+  it("resolves to selected mode id on submit", async () => {
+    const dialog = new PlayerSpeedDialog({ defaultModeId: "walk-fast" });
+    dialog._onSubmit();
+    await expect(dialog.promise).resolves.toBe("walk-fast");
+  });
+
+  it("resolves to null on cancel", async () => {
+    const dialog = new PlayerSpeedDialog();
+    dialog._onCancel();
+    await expect(dialog.promise).resolves.toBeNull();
+  });
+
+  it("_prepareContext marks the default mode as selected", async () => {
+    const dialog = new PlayerSpeedDialog({ defaultModeId: "horseback" });
+    game.settings.get = vi.fn((mod, key) =>
+      key === "travelModes" ? undefined : undefined
+    );
+    const ctx = await dialog._prepareContext();
+    const horse = ctx.modes.find((m) => m.id === "horseback");
+    expect(horse?.selected).toBe(true);
   });
 });

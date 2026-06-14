@@ -104,12 +104,22 @@ function toCenter(off) {
  * @returns {{ i: number, j: number }[]}
  */
 function getNeighborOffsets(off) {
+  const grid = canvas.grid;
+  if (!grid) return [];
+
+  const coords = { i: off.i, j: off.j };
   let raw;
+
   try {
-    raw = canvas.grid.getNeighbors(off.i, off.j);
+    if (typeof grid.getAdjacentOffsets === "function") {
+      raw = grid.getAdjacentOffsets(coords);
+    } else if (typeof grid.getNeighbors === "function") {
+      raw = grid.getNeighbors(off.i, off.j);
+    }
   } catch {
     return [];
   }
+
   if (!Array.isArray(raw)) return [];
   return raw.map((nb) => {
     if (nb && typeof nb === "object" && !Array.isArray(nb)) {
@@ -130,16 +140,35 @@ const offKey = (off) => `${off.i},${off.j}`;
 
 /**
  * Returns true if the segment from `from` to `to` crosses a MOVE-blocking wall.
+ * Supports Foundry v14 (ClockwiseSweepPolygon) and older canvas.walls APIs.
  * @param {{ x: number, y: number }} from
  * @param {{ x: number, y: number }} to
  * @returns {boolean}
  */
-function wallBlocks(from, to) {
+export function isWallBlocked(from, to) {
   try {
-    return !!canvas.walls.checkCollision(from, to, { type: "move" });
+    canvas.scene?.initializeEdges?.();
+
+    if (typeof canvas.walls?.checkCollision === "function") {
+      return !!canvas.walls.checkCollision(from, to, { type: "move" });
+    }
+
+    const Sweep = foundry.canvas?.geometry?.ClockwiseSweepPolygon;
+    if (typeof Sweep?.testCollision === "function") {
+      return !!Sweep.testCollision(from, to, { type: "move", mode: "any" });
+    }
+
+    if (typeof canvas.scene?.testCollision === "function") {
+      return !!canvas.scene.testCollision(from, to, { type: "move", mode: "any" });
+    }
   } catch {
     return false;
   }
+  return false;
+}
+
+function wallBlocks(from, to) {
+  return isWallBlocked(from, to);
 }
 
 // ---------------------------------------------------------------------------

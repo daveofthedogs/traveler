@@ -31,6 +31,7 @@ inside Foundry.
   - [Scene Distance Scale Override](#scene-distance-scale-override)
   - [Drawing & Editing Routes](#drawing--editing-routes)
   - [Level Change Regions](#level-change-regions)
+  - [Party System](#party-system)
   - [Encounter Zones](#encounter-zones)
   - [World Clock Integration](#world-clock-integration)
   - [Export & Import](#export--import)
@@ -56,6 +57,7 @@ inside Foundry.
 | Travel time & cost | Calculated from configurable travel modes |
 | **Scene Levels** | Routes carry per-point elevation; token elevation updates live |
 | **Level Change Regions** | Region behaviors gate elevation transitions behind skill checks |
+| **Party System** | One party token on the map; every member rolls checks individually |
 | **Encounter zones** | Explicit, auto-interval, and fixed encounter zones on routes |
 | **GM encounter dialog** | Accept / Regenerate / Decline when a random encounter fires |
 | **Player pathfinding** | Players draw A* routes respecting walls, fog, and regions |
@@ -277,6 +279,53 @@ saved until you click **Save**.
 | **Camera** | Intro pan duration, pause before draw, zoom factor, smoothness, token update rate |
 | **Smoothing** | None, Catmull-Rom (spline), Chaikin (rounded corners) |
 | **⚔ Encounters** | Add and manage encounter zones *(only visible when editing a saved route)* |
+
+---
+
+### Party System
+
+Designed for campaigns where a **single party token** represents the whole group on an overland
+map, instead of every player having an individual token.
+
+#### Setup
+
+1. Create one actor to serve as the **party token** (e.g. *"The Company"*) and place its token on
+   the scene.
+2. Create individual character actors for each player normally.
+3. Open **Settings → Module Settings → Traveler → Configure Parties**.
+4. Click **Add Party** and fill in:
+   - **Party Name** — e.g. *The Adventurers*
+   - **Party Token Actor** — drag the party actor from the Actor sidebar
+   - **Party Members** — drag each character actor from the sidebar
+   - **Resolution Mode** — how individual rolls are combined (see table below)
+   - **Travel Pace** — which member's speed governs the route animation
+5. Click **Save**.
+
+#### Resolution Modes
+
+| Mode | Party passes when… |
+|---|---|
+| **Best of party** *(default)* | At least one member succeeds |
+| **All must pass** | Every member succeeds |
+| **Majority** | More than half succeed |
+| **Designated roller** | One named character's roll decides for everyone |
+
+#### What happens during a Level Change check
+
+When the party token enters a region with a `traveler.changeLevel` behavior that requires a roll:
+
+1. The GM sees a **Party Check Collector** dialog showing each member's status.
+2. Each player receives a **Level Traversal Check** dialog for their **own** character — using
+   their individual roll data, items, and statuses.
+3. As players submit rolls the GM's collector updates live.
+4. If a player disconnects the GM can click **Force Resolve** to proceed without them.
+5. Failure damage is applied to each **individual** character who failed — not to the party token.
+6. A chat message summarises every roll result.
+
+#### Player pathfinding with the party token
+
+Any party member can use the **Player Route Tool** to propose a path for the party token, even
+though they don't technically own it. The GM approval workflow applies as normal.
 
 ---
 

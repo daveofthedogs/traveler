@@ -8,10 +8,14 @@ import { IndyRouteTravelModesApp } from "./apps/travel-modes.js";
 import { IndyRouteCurrenciesApp } from "./apps/currencies.js";
 import { buildRouteFromPoints, getSceneRoutes, createRouteRecord } from "./routes.js";
 import { TravelerChangeLevelBehavior } from "./behaviors/change-level.js";
+import { TravelerLevelCheckDialog } from "./behaviors/level-check-dialog.js";
 import { PlayerRouteTool, proposalToPayload } from "./tool-player.js";
 import { ProposalStore } from "./proposals.js";
 import { PLAYER_ROUTE_MODE, getPlayerRouteMode } from "./settings.js";
 import { MSG } from "./constants.js";
+import { PartyConfigApp } from "./apps/party-config.js";
+import { PartyCheckSession } from "./party.js";
+import { registerAllSuites } from "../tests/quench/index.js";
 
 /* -------------------------------------------- */
 /* Settings registration + menu                 */
@@ -38,7 +42,9 @@ Hooks.once("init", () => {
     `modules/${MODULE_ID}/templates/encounter-dialog.hbs`,
     `modules/${MODULE_ID}/templates/encounter-editor.hbs`,
     `modules/${MODULE_ID}/templates/player-speed-dialog.hbs`,
-    `modules/${MODULE_ID}/templates/scene-settings.hbs`
+    `modules/${MODULE_ID}/templates/scene-settings.hbs`,
+    `modules/${MODULE_ID}/templates/party-config.hbs`,
+    `modules/${MODULE_ID}/templates/party-check-collector.hbs`
   ]);
 
   // Expose encounter helpers on globalThis so renderer.js can use them
@@ -108,6 +114,23 @@ Hooks.once("init", () => {
     hint: "Override currency conversions used in route cost breakdowns.",
     icon: "fas fa-coins",
     type: IndyRouteCurrenciesApp,
+    restricted: true
+  });
+
+  game.settings.register(MODULE_ID, "parties", {
+    name: "Parties",
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
+  });
+
+  game.settings.registerMenu(MODULE_ID, "partiesMenu", {
+    name: "Parties",
+    label: "Configure Parties",
+    hint: "Define party groups for overland travel with a shared party token.",
+    icon: "fas fa-users",
+    type: PartyConfigApp,
     restricted: true
   });
 
@@ -329,6 +352,35 @@ Hooks.once("ready", () => {
       IndyRouteRenderer.resumeRoute(data.payload?.routeId);
     }
 
+    // --- party check protocol ---
+
+    // Player receives a check request targeted at their userId
+    if (data.type === MSG.PARTY_CHECK_REQUEST && data.payload?.userId === game.user.id) {
+      const { sessionId, actorId, checkConfig } = data.payload;
+      // Find a token for this actor on the current scene
+      const tokenDoc = canvas.tokens?.placeables?.find?.(
+        (t) => t.actor?.id === actorId
+      )?.document ?? null;
+      const dialog = new TravelerLevelCheckDialog({
+        behavior:       checkConfig,
+        tokenDoc,
+        partySessionId: sessionId,
+        partyActorId:   actorId
+      });
+      dialog.render({ force: true });
+      // No need to await — result is submitted via socket in _submitResult
+    }
+
+    // GM receives an individual result back from a party member
+    if (data.type === MSG.PARTY_CHECK_RESULT && game.user.isGM) {
+      const { sessionId } = data.payload ?? {};
+      const session = PartyCheckSession.get(sessionId);
+      if (session) {
+        session.addResult(data.payload);
+        session._collector?.refresh?.();
+      }
+    }
+
     // All clients: GM approved — play the route and remove from store
     if (data.type === MSG.PLAYER_APPROVE) {
       const proposal = data.payload;
@@ -533,7 +585,5 @@ Hooks.once("ready", () => {
 // Quench integration tests — registered only when the quench module is active
 // ---------------------------------------------------------------------------
 Hooks.once("quenchReady", (quench) => {
-  import("../tests/quench/index.js")
-    .then(({ registerAllSuites }) => registerAllSuites(quench))
-    .catch((err) => console.error("Traveler | Failed to load Quench suites:", err));
+  registerAllSuites(quench);
 });

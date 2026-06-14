@@ -13,6 +13,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased] — targeting v2.0.0
 
 ### Commits
+- `b4284fc` — 2026-06-13 — Add Party System (party tokens, multi-user checks, party config UI)
 - `e0662db` — 2026-06-13 — Add architecture.md documentation
 - `c3df688` — 2026-06-13 — Uplift to Foundry v14; fork renamed from `indy-route` to `traveler`
 - `5bd191a` — 2026-06-13 — Add v14 Scene Levels support (per-point elevation, level picker, token elevation during playback)
@@ -28,6 +29,68 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `b24889e` — 2026-06-13 — Rewrite README.md for Traveler; add DEVELOPER-README.md
 - `91264e9` — 2026-06-13 — Fix encounter pause: broadcast ENCOUNTER_PAUSE/RESUME to all clients
 - `157af25` — 2026-06-13 — Move compose file to docker/, overhaul .gitignore, update CI and npm scripts
+- `b4284fc` — 2026-06-13 — Add Party System (party tokens, multi-user checks, party config UI)
+
+### Added — Party System
+
+When an overland map uses a single **party token** (one token representing the whole group),
+the module now dispatches individual roll-check dialogs to each party member and collects results
+via a GM collector dialog.
+
+**New files:**
+- `scripts/party.js` — Party data model, CRUD helpers, `PartyCheckSession` store, and
+  `resolvePartyCheck` pure logic (4 resolution modes).
+- `scripts/apps/party-config.js` — `PartyConfigApp` (ApplicationV2) for managing party groups.
+- `scripts/apps/party-check-collector.js` — `PartyCheckCollector` (ApplicationV2) shown to the GM
+  while waiting for member rolls; live-updates as each result arrives; has a Force Resolve button.
+- `templates/party-config.hbs` — Party list + inline editor with drag-drop actor assignment.
+- `templates/party-check-collector.hbs` — Roll progress table with pass/fail indicators.
+- `docs/party.plan.md` — Design plan.
+- `tests/unit/party.test.js` — 39 unit tests covering all helpers and resolution modes.
+- `tests/quench/party.quench.js` — Integration test suite (CRUD, socket round-trip, UI open/close).
+
+**Modified files:**
+- `scripts/constants.js` — Added `MSG.PARTY_CHECK_REQUEST`, `MSG.PARTY_CHECK_RESULT`,
+  `MSG.PARTY_CHECK_RESOLVED`.
+- `scripts/behaviors/change-level.js` — `_handleMoveIn` now calls `getPartyForToken`; if the
+  token is a party token the new `_handlePartyMoveIn` method orchestrates the full multi-user
+  socket protocol including chat summary.
+- `scripts/behaviors/level-check-dialog.js` — New `partySessionId` / `partyActorId` constructor
+  options; when set, `_submitResult` emits a `PARTY_CHECK_RESULT` socket message instead of only
+  resolving a local promise.
+- `scripts/traveler.js` — Registers the `parties` world setting and `Configure Parties` menu;
+  loads new templates; adds `PARTY_CHECK_REQUEST` and `PARTY_CHECK_RESULT` socket handlers.
+- `scripts/tool-player.js` — `start()` now falls back to the party token when the current user
+  has no owned token but is a member of the party assigned to a token on the scene.
+
+**Party data model:**
+```
+id, name, partyTokenActorId, memberActorIds[], resolutionMode, designatedActorId, travelPaceMode
+```
+
+**Resolution modes:** `all` | `best` (default) | `majority` | `designated`
+
+**Travel pace modes:** `slowest` | `average` | `fastest`
+
+### Changed — CI Bootstrap & Test Coverage
+
+- **`docker/patches/10-install-quench.sh`**: Container patch (Felddy `CONTAINER_PATCHES`) that
+  downloads Quench v0.10.0 into `/data/modules/quench` on every fresh CI volume.
+- **`docker/compose.test.yml`**: Mounts patch directory; sets `FOUNDRY_TELEMETRY=false`,
+  `FOUNDRY_PROTOCOL=4`, and `CONTAINER_PATCHES=/data/container_patches`.
+- **`scripts/ci-bootstrap.js`**: Playwright bootstrap — verifies Quench, installs **dnd5e** via
+  Setup API/UI, confirms traveler + quench are active in the CI world.
+- **`scripts/foundry-playwright.js`**: Shared Playwright helpers (`gotoWithRetry`, setup auth,
+  `joinWorldAsGM`) used by bootstrap and Quench runner.
+- **`scripts/foundry-wait.js`**: Now waits for both `/api/status` and root HTTP reachability;
+  default timeout raised to 300 s.
+- **`scripts/run-quench.js`**: Uses shared helpers instead of navigating directly to `/game`.
+- **`package.json`**: Added `foundry:bootstrap` npm script.
+- **`.github/workflows/ci.yml`**: Runs bootstrap after `foundry:wait`; dumps Docker logs on failure.
+- **`vitest.config.js`**: Coverage scoped to unit-testable modules; thresholds remain 70 %.
+- **Unit tests**: Expanded coverage for smoothing, routes, fog-checker, level-check-dialog,
+  party-check-collector, settings, clock, encounters, change-level, party, and player-speed.
+- **`tests/quench/party.quench.js`**: Fixed invalid `await import()` in non-async socket test.
 
 ### Changed — Repository Housekeeping (pre-push)
 

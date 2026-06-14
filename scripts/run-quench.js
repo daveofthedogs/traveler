@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Playwright CI driver — connects to the Dockerised Foundry instance,
- * logs in as the admin GM, triggers quench.runAll(), waits for completion,
- * and exits 0 (pass) or 1 (fail) based on test results.
+ * logs in as the admin GM, triggers quench.runBatches("traveler.**"), waits
+ * for completion, and exits 0 (pass) or 1 (fail) based on test results.
+ *
+ * Prerequisites: run `npm run foundry:bootstrap` first to install dnd5e + Quench.
  *
  * Usage:
  *   FOUNDRY_URL=http://localhost:30000 \
@@ -10,107 +12,161 @@
  *   node scripts/run-quench.js
  */
 
-import { chromium } from "playwright";
+import {
+  BASE_URL,
+  launchBrowser,
+  newFoundryPage,
+  joinWorldAsGM,
+  releaseWorldSession,
+  authenticateSetup
+} from "./foundry-playwright.js";
 
-const BASE_URL    = process.env.FOUNDRY_URL        ?? "http://localhost:30000";
-const ADMIN_KEY   = process.env.FOUNDRY_ADMIN_KEY  ?? "admin";
-const TIMEOUT_MS  = parseInt(process.env.QUENCH_TIMEOUT_MS ?? "300000", 10); // 5 min
-const KEEP_WORLD  = process.env.TRAVELER_KEEP_WORLD === "true";
+const KEEP_WORLD = process.env.TRAVELER_KEEP_WORLD === "true";
+const BATCH_GLOB = "traveler.**";
+
+/** @param {Array<{ fullTitle?: string, title?: string, err?: { message?: string, stack?: string } }>} failures */
+function printFailures(failures) {
+  if (!failures?.length) return;
+
+  console.error("\n──────────────────────────────────────────");
+  console.error("Failed Tests");
+  console.error("──────────────────────────────────────────");
+
+  failures.forEach((test, index) => {
+    const title = test.fullTitle ?? test.title ?? "(unknown test)";
+    console.error(`\n${index + 1}) ${title}`);
+
+    const message = test.err?.message?.trim();
+    if (message) {
+      for (const line of message.split("\n")) {
+        console.error(`   ${line}`);
+      }
+    }
+
+    const stack = test.err?.stack?.trim();
+    if (stack) {
+      const stackLines = stack.split("\n").slice(message ? 1 : 0);
+      for (const line of stackLines) {
+        console.error(`   ${line}`);
+      }
+    }
+  });
+
+  console.error("\n──────────────────────────────────────────\n");
+}
 
 // ---------------------------------------------------------------------------
 
 async function main() {
   console.log(`[run-quench] Connecting to Foundry at ${BASE_URL}`);
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  });
-
-  const page = await browser.newPage();
+  const browser = await launchBrowser();
+  const page    = await newFoundryPage(browser);
 
   try {
-    // ── 1. Navigate to the join page and enter the world ────────────────
-    await page.goto(`${BASE_URL}/game`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto(`${BASE_URL}/setup`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await authenticateSetup(page);
+    await releaseWorldSession(page);
 
-    // If redirected to /setup or /auth, log in as admin first
-    const url = page.url();
-    if (url.includes("/setup") || url.includes("/auth")) {
-      console.log("[run-quench] Logging in to admin panel…");
-      await page.fill("input[name='adminKey'], input[type='password']", ADMIN_KEY);
-      await page.click("button[type='submit']");
-      await page.waitForURL(`${BASE_URL}/setup`, { timeout: 15_000 });
-      await page.goto(`${BASE_URL}/game`, { waitUntil: "domcontentloaded" });
-    }
+    await joinWorldAsGM(page);
 
-    // ── 2. Wait for the join screen, pick the GM user ────────────────────
-    // Foundry's join screen shows user selection before entering the world
-    const joinUrl = `${BASE_URL}/join`;
-    if (page.url().includes("/join")) {
-      console.log("[run-quench] Joining world as Gamemaster…");
-      // Select the first user that is a GM (or the only user if there's one)
-      const gmOption = page.locator("select#userid option").filter({ hasText: /game\s*master|gm/i });
-      if (await gmOption.count() > 0) {
-        await page.selectOption("select#userid", { label: (await gmOption.first().innerText()).trim() });
-      }
-      await page.click("button[name='join']");
-    }
-
-    // ── 3. Wait for canvas — Foundry is fully loaded ────────────────────
-    console.log("[run-quench] Waiting for Foundry canvas…");
-    await page.waitForSelector("#board", { timeout: TIMEOUT_MS });
-    await page.waitForTimeout(3_000); // allow modules to finish their init hooks
-
-    // ── 4a. Inject inspect-mode flag so fixtures skip teardown ──────────
     if (KEEP_WORLD) {
       console.log("[run-quench] TRAVELER_KEEP_WORLD=true — test artifacts will NOT be deleted.");
       await page.evaluate(() => { window.TRAVELER_KEEP_WORLD = true; });
     }
 
-    // ── 4b. Ensure Quench is available ──────────────────────────────────
-    const quenchAvailable = await page.evaluate(() => typeof window.quench !== "undefined");
+    const quenchAvailable = await page.evaluate(() =>
+      typeof window.quench?.runBatches === "function"
+    );
     if (!quenchAvailable) {
       throw new Error(
-        "Quench is not available. Make sure the quench module is installed and active in the CI world."
+        "Quench is not available. Run `npm run foundry:bootstrap` before integration tests."
       );
     }
 
-    // ── 5. Run all registered Quench batches ────────────────────────────
-    console.log("[run-quench] Running Quench test suites…");
-    const results = await page.evaluate(async () => {
-      await quench.runAll();
+    await page.waitForFunction(() => {
+      const batches = globalThis.quench?._testBatches;
+      if (!batches?.size) return false;
+      return [...batches.keys()].some((key) => key.startsWith("traveler."));
+    }, { timeout: 60_000 });
 
-      const stats = quench.stats ?? {};
-      const batches = [...(quench.suites?.values?.() ?? [])].map((suite) => ({
-        name:    suite.displayName ?? suite.packageName,
-        passed:  suite.stats?.passes ?? 0,
-        failed:  suite.stats?.failures ?? 0,
-        pending: suite.stats?.pending ?? 0
-      }));
+    const batchNames = await page.evaluate(() =>
+      [...globalThis.quench._testBatches.keys()].filter((key) => key.startsWith("traveler."))
+    );
+    console.log(`[run-quench] Registered batches: ${batchNames.join(", ")}`);
+
+    console.log("[run-quench] Running Quench test suites…");
+    const results = await page.evaluate(async (glob) => {
+      if (quench._currentRunner) quench.abort();
+
+      // Quench v0.10 on Foundry v14 requires the runner app to be rendered
+      // before programmatic runBatches() will execute (otherwise Mocha hangs).
+      await quench.app.render(true);
+      quench.mocha.timeout(180_000);
+
+      const runner = await quench.runBatches(glob);
+      const runEnd = Mocha.Runner.constants.EVENT_RUN_END;
+
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error("Quench run did not finish within 4 minutes"));
+        }, 4 * 60 * 1000);
+
+        runner.once(runEnd, () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+
+      const report = quench.reports?.json ? JSON.parse(quench.reports.json) : null;
+      const stats = report?.stats ?? runner.stats ?? {};
+      const batches = [...quench._testBatches.values()]
+        .filter((batch) => batch.key.startsWith("traveler."))
+        .map((batch) => ({
+          name: batch.displayName ?? batch.key,
+          key:  batch.key
+        }));
+
+      const failedTests = report?.failures?.length
+        ? report.failures
+        : (report?.tests ?? []).filter((t) => t.state === "failed");
 
       return {
-        totalPassed:  stats.passes   ?? batches.reduce((n, b) => n + b.passed,  0),
-        totalFailed:  stats.failures ?? batches.reduce((n, b) => n + b.failed,  0),
-        totalPending: stats.pending  ?? batches.reduce((n, b) => n + b.pending, 0),
-        batches
+        totalPassed:  stats.passes   ?? 0,
+        totalFailed:  stats.failures ?? 0,
+        totalPending: stats.pending  ?? 0,
+        totalTests:   stats.tests    ?? 0,
+        batches,
+        failures: failedTests.map((t) => ({
+          fullTitle: t.fullTitle ?? t.title,
+          title:     t.title,
+          err:       t.err ? { message: t.err.message, stack: t.err.stack } : undefined
+        }))
       };
-    });
+    }, BATCH_GLOB);
 
-    // ── 6. Print results ─────────────────────────────────────────────────
     console.log("\n──────────────────────────────────────────");
     console.log("Quench Results");
     console.log("──────────────────────────────────────────");
     for (const b of results.batches) {
-      const status = b.failed > 0 ? "✗" : "✓";
-      console.log(`  ${status}  ${b.name}  (${b.passed} passed, ${b.failed} failed, ${b.pending} pending)`);
+      console.log(`  • ${b.name} (${b.key})`);
     }
     console.log("──────────────────────────────────────────");
-    console.log(`Total: ${results.totalPassed} passed / ${results.totalFailed} failed / ${results.totalPending} pending`);
+    console.log(
+      `Total: ${results.totalPassed} passed / ${results.totalFailed} failed / ` +
+      `${results.totalPending} pending (${results.totalTests} tests)`
+    );
     console.log("──────────────────────────────────────────\n");
 
     await browser.close();
 
+    if (results.totalTests === 0) {
+      console.error("[run-quench] No Traveler tests ran — batches may not have registered.");
+      process.exit(1);
+    }
+
     if (results.totalFailed > 0) {
+      printFailures(results.failures);
       console.error(`[run-quench] ${results.totalFailed} test(s) failed.`);
       process.exit(1);
     }

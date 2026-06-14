@@ -3,6 +3,7 @@ import { CHANNEL } from "./constants.js";
 import { IndyRouteRenderer } from "./renderer.js";
 import { findPath } from "./pathfinding/astar.js";
 import { isExplored, fogBoundaryAnchor } from "./pathfinding/fog-checker.js";
+import { getPartyForToken, isPartyMember } from "./party.js";
 
 // Expose isExplored on globalThis so astar.js can consume it without a
 // circular import (fog-checker ← astar indirect dependency avoided).
@@ -54,13 +55,33 @@ export const PlayerRouteTool = {
       return;
     }
 
-    const token = canvas.tokens.controlled[0];
+    // Prefer a directly-controlled owned token.
+    let token = canvas.tokens.controlled.find((t) => t.isOwner);
+
+    // If no owned token is controlled, check whether a party token is selected
+    // that the current user belongs to, OR find the party token on the scene.
     if (!token) {
-      ui.notifications.warn("Select your token before drawing a route.");
+      const controlled = canvas.tokens.controlled[0];
+      if (controlled && isPartyMember(game.user.id, controlled.document)) {
+        token = controlled;
+      } else {
+        // No controlled token at all — search the scene for a party whose member
+        // the current user is.
+        const partyToken = canvas.tokens.placeables.find((t) => {
+          return isPartyMember(game.user.id, t.document);
+        });
+        if (partyToken) {
+          token = partyToken;
+        }
+      }
+    }
+
+    if (!token) {
+      ui.notifications.warn("Select your token (or the party token) before drawing a route.");
       return;
     }
-    if (!token.isOwner) {
-      ui.notifications.warn("You do not own that token.");
+    if (!token.isOwner && !isPartyMember(game.user.id, token.document)) {
+      ui.notifications.warn("You do not own that token and are not a member of its party.");
       return;
     }
 

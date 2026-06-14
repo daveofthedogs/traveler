@@ -1,0 +1,162 @@
+<div class="traveler-party-config-wrap">
+  <div class="party-toolbar">
+    <button type="button" data-action="add-party" class="party-add-btn">
+      <i class="fa-solid fa-plus"></i> Add Party
+    </button>
+    <p class="party-hint">
+      Drag actors from the sidebar onto the <strong>Party Token</strong> or <strong>Members</strong>
+      drop zones. The Party Token is the single token visible on the overland map; Members are the
+      individual character actors who roll checks.
+    </p>
+  </div>
+
+  {{#if parties.length}}
+  <div class="party-list">
+    {{#each parties}}
+    <details class="party-row" data-party-id="{{id}}" open>
+      <summary class="party-summary">
+        <span class="party-name-label">{{name}}</span>
+        <span class="party-meta">
+          {{members.length}} member{{#if (ne members.length 1)}}s{{/if}}
+          &bull; {{resolutionLabel}}
+        </span>
+      </summary>
+
+      <div class="party-editor" data-party-id="{{id}}">
+
+        {{!-- Name --}}
+        <div class="form-group">
+          <label>Party Name</label>
+          <input type="text" name="name" value="{{name}}" placeholder="e.g. The Adventurers" />
+        </div>
+
+        {{!-- Party token actor --}}
+        <div class="form-group">
+          <label>Party Token Actor</label>
+          <div class="party-token-drop drop-zone" data-party-id="{{id}}">
+            {{#if partyTokenActor}}
+              <img src="{{partyTokenActor.img}}" alt="{{partyTokenActor.name}}" class="actor-thumb" />
+              <span>{{partyTokenActor.name}}</span>
+              <button type="button" class="btn-icon remove-btn"
+                      data-action="remove-token-actor" data-party-id="{{id}}"
+                      title="Remove">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            {{else}}
+              <i class="fa-solid fa-user-slash muted-icon"></i>
+              <span class="muted">Drop an Actor here</span>
+            {{/if}}
+          </div>
+        </div>
+
+        {{!-- Members --}}
+        <div class="form-group">
+          <label>Party Members</label>
+          <div class="party-member-drop drop-zone" data-party-id="{{id}}">
+            <div class="member-chips">
+              {{#each members}}
+              <span class="member-chip">
+                <img src="{{img}}" alt="{{name}}" class="actor-thumb-sm" />
+                {{name}}
+                <button type="button" class="btn-icon remove-btn"
+                        data-action="remove-member" data-party-id="{{../id}}" data-actor-id="{{id}}"
+                        title="Remove member">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </span>
+              {{/each}}
+              <span class="drop-hint muted">
+                <i class="fa-solid fa-plus"></i> Drop actors here
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {{!-- Resolution mode --}}
+        <div class="form-group">
+          <label>Resolution Mode</label>
+          <select name="resolutionMode">
+            {{#each @root.resolutionModes}}
+            <option value="{{value}}" {{#if (eq value ../resolutionMode)}}selected{{/if}}>
+              {{label}}
+            </option>
+            {{/each}}
+          </select>
+        </div>
+
+        {{!-- Designated actor (shown when mode=designated) --}}
+        <div class="form-group designated-field {{#unless (eq resolutionMode 'designated')}}hidden{{/unless}}">
+          <label>Designated Roller</label>
+          <select name="designatedActorId">
+            <option value="">— Select a member —</option>
+            {{#each members}}
+            <option value="{{id}}" {{#if (eq id ../designatedActorId)}}selected{{/if}}>
+              {{name}}
+            </option>
+            {{/each}}
+          </select>
+        </div>
+
+        {{!-- Travel pace --}}
+        <div class="form-group">
+          <label>Travel Pace</label>
+          <select name="travelPaceMode">
+            {{#each @root.paceModes}}
+            <option value="{{value}}" {{#if (eq value ../travelPaceMode)}}selected{{/if}}>
+              {{label}}
+            </option>
+            {{/each}}
+          </select>
+        </div>
+
+        <div class="party-actions">
+          <button type="button" data-action="save-party" data-party-id="{{id}}" class="btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Save
+          </button>
+          <button type="button" data-action="delete-party" data-party-id="{{id}}" class="btn-danger">
+            <i class="fa-solid fa-trash"></i> Delete
+          </button>
+        </div>
+
+      </div>{{!-- /party-editor --}}
+    </details>
+    {{/each}}
+  </div>
+  {{else}}
+  <p class="party-empty muted">
+    No parties configured. Click <strong>Add Party</strong> to create one.
+  </p>
+  {{/if}}
+
+  <style>
+    .traveler-party-config-wrap { padding: 8px; font-size: 13px; }
+    .party-toolbar { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .party-add-btn { white-space: nowrap; }
+    .party-hint { margin: 0; font-size: 11px; color: #888; }
+    .party-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+    .party-row { border: 1px solid #ccc; border-radius: 4px; background: #fafafa; }
+    .party-summary { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; background: #f0f0f0; border-radius: 4px 4px 0 0; }
+    .party-name-label { font-weight: 600; }
+    .party-meta { font-size: 11px; color: #666; margin-left: auto; }
+    .party-editor { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .form-group { display: flex; align-items: center; gap: 8px; }
+    .form-group label { width: 160px; font-weight: 500; flex-shrink: 0; }
+    .form-group input, .form-group select { flex: 1; }
+    .drop-zone { border: 2px dashed #aaa; border-radius: 4px; padding: 6px 10px; min-height: 38px; display: flex; align-items: center; gap: 6px; flex: 1; }
+    .drop-zone:hover { border-color: #666; }
+    .member-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .member-chip { display: inline-flex; align-items: center; gap: 4px; background: #e8e8e8; border-radius: 12px; padding: 2px 8px; font-size: 12px; }
+    .drop-hint { font-size: 11px; }
+    .actor-thumb { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+    .actor-thumb-sm { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+    .btn-icon { background: none; border: none; cursor: pointer; padding: 0 2px; color: #666; }
+    .btn-icon:hover { color: #c00; }
+    .muted-icon { color: #bbb; }
+    .muted { color: #999; }
+    .party-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+    .btn-primary { background: #4a90d9; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; }
+    .btn-danger  { background: #c0392b; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; }
+    .party-empty { text-align: center; padding: 24px; }
+    .designated-field.hidden { display: none; }
+  </style>
+</div>

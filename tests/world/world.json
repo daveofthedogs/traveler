@@ -3,15 +3,23 @@
   "title": "Traveler CI",
   "description": "Minimal test world used by the Traveler CI pipeline. All scenes, regions, and tokens are created programmatically by the Quench test suites — no map data is committed here.",
   "system": "dnd5e",
-  "coreVersion": "14",
-  "systemVersion": "3.0.0",
-  "modules": ["traveler", "quench"],
-  "background": "",
-  "nextSession": null,
+  "coreVersion": "14.363",
+  "systemVersion": "5.3.3",
+  "modules": [
+    "traveler",
+    "quench"
+  ],
   "gridDistance": 5,
   "gridUnits": "ft",
   "initialScene": null,
   "initialActorId": null,
   "journal": "",
-  "playlistSound": null
+  "playlistSound": null,
+  "compatibility": {
+    "verified": "14.363",
+    "minimum": "14"
+  },
+  "lastPlayed": "Sun Jun 14 2026 05:34:00 GMT+0000 (Coordinated Universal Time)",
+  "playtime": 4,
+  "flags": {}
 }

@@ -5,92 +5,66 @@
 ## All paths below are relative to this file (docker/).
 ## The project root is one level up (../).
 ##
+## ── Design ───────────────────────────────────────────────────────────────────
+##
+## Ephemeral test container — no named Docker volumes.  Named volumes caused
+## repeated EACCES failures on Windows/WSL Docker hosts.  The container runs as
+## root (acceptable for local/CI throwaway instances).
+##
+## To pause without losing container state (license, dnd5e, Quench installs):
+##   npm run foundry:stop
+##   npm run foundry:start
+##
+## Full wipe and fresh boot:
+##   npm run foundry:reset
+##
 ## ── Prerequisites ─────────────────────────────────────────────────────────────
 ##
 ##   1. Copy .env.example (project root) to .env and fill in your credentials.
-##      .env must live in the PROJECT ROOT (where npm scripts are run from),
-##      not inside docker/.  Docker Compose loads it from the working directory.
 ##
 ## ── Quick start ──────────────────────────────────────────────────────────────
 ##
-##   npm run foundry:up          # starts the container (detached)
-##   npm run foundry:wait        # waits for Foundry to be ready (~2 min first run)
-##   npm run test:integration    # run Quench tests via Playwright
+##   npm run foundry:reset        # down:clean + up + tail logs
+##   npm run foundry:wait
+##   npm run foundry:bootstrap
+##   npm run test:integration
 ##
-## ── Inspect mode — keep test data alive for manual inspection ────────────────
-##
-##   npm run test:inspect
-##
-##   After the tests finish the container stays running.  Open a browser:
-##     http://localhost:30000
-##   Log in with your FOUNDRY_ADMIN_KEY.  All test-created scenes, actors,
-##   notes and tokens are preserved exactly as the tests left them.
-##
-##   To clean up world data and start fresh:
-##     npm run world:clean
-##
-## ── Teardown ─────────────────────────────────────────────────────────────────
-##
-##   npm run foundry:down              # stop container (keeps named volume)
-##   npm run foundry:down:clean        # stop + wipe named volume (full reset;
-##                                     # requires re-activation next time)
-##
-
-version: "3.8"
 
 services:
   foundry:
-    ## felddy/foundryvtt handles license activation and Foundry download
-    ## automatically.  See https://github.com/felddy/foundryvtt-docker
     image: felddy/foundryvtt:14
+    hostname: traveler-foundry-ci
+
+    ## Run as root — avoids volume ownership issues on Windows/WSL Docker.
+    ## This is a throwaway local/CI test instance, not a production server.
+    user: "0:0"
 
     environment:
-      ## ── Credentials ──────────────────────────────────────────────────
-      ## Store all four values in a .env file at the PROJECT ROOT.
-      ## See .env.example — never commit real values.
       FOUNDRY_LICENSE_KEY:       "${FOUNDRY_LICENSE_KEY}"
       FOUNDRY_ADMIN_KEY:         "${FOUNDRY_ADMIN_KEY}"
       FOUNDRY_USERNAME:          "${FOUNDRY_USERNAME}"
       FOUNDRY_PASSWORD:          "${FOUNDRY_PASSWORD}"
-
-      ## ── Boot options ─────────────────────────────────────────────────
-      ## Start directly into the CI test world on first boot
+      FOUNDRY_RELEASE_URL:       "${FOUNDRY_RELEASE_URL:-}"
+      CONTAINER_VERBOSE:         "${CONTAINER_VERBOSE:-}"
       FOUNDRY_WORLD:             "traveler-ci"
-
-      ## Keep configuration between restarts (avoids re-activation)
       CONTAINER_PRESERVE_CONFIG: "true"
-
-      ## Silence the update-check nag
       FOUNDRY_RELEASE_CHANNEL:   "stable"
+      FOUNDRY_TELEMETRY:         "false"
+      FOUNDRY_PROTOCOL:          "4"
+      FOUNDRY_NO_BACKUPS:        "true"
+      CONTAINER_PATCHES:         "/data/container_patches"
 
     volumes:
-      ## Module source — read-only so tests never accidentally modify code.
-      ## Path is relative to this compose file (../ = project root).
-      - ..:/home/foundry/resources/app/modules/traveler:ro
-
-      ## Traveler CI test world definition (world.json lives here).
-      ## Bind mount so world data IS written to ../tests/world/ and survives
-      ## container restarts.  Run `npm run world:clean` to reset it.
-      - ../tests/world:/home/foundry/data/worlds/traveler-ci
-
-      ## Named volume for Foundry's full data directory (config, users, other
-      ## module installs, etc.).  Prevents re-activation on every restart and
-      ## lets the Quench module stay installed between runs.
-      ## Destroyed only by `foundry:down:clean` (docker compose down -v).
-      - foundry-data:/home/foundry/data
+      - ./patches:/data/container_patches:ro
+      - ..:/mnt/traveler-module:ro
+      - ../tests/world:/mnt/traveler-ci-world
 
     ports:
       - "30000:30000"
 
-    ## Wait up to 3 minutes for Foundry to finish initialising
     healthcheck:
       test:         ["CMD", "curl", "-sf", "http://localhost:30000/api/status"]
-      interval:     10s
-      timeout:      5s
-      retries:      18
-      start_period: 90s
-
-## Named volume — persists Foundry config/module installs across restarts.
-## Destroyed only by `down -v` (intentional full reset).
-volumes:
-  foundry-data:
+      interval:     15s
+      timeout:      10s
+      retries:      40
+      start_period: 600s

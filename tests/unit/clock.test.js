@@ -6,8 +6,8 @@
  * in the Quench integration suite.
  */
 
-import { describe, it, expect } from "vitest";
-import { computeTravelSeconds, formatTravelDuration } from "../../scripts/clock.js";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { computeTravelSeconds, formatTravelDuration, advanceClock } from "../../scripts/clock.js";
 
 // ---------------------------------------------------------------------------
 // computeTravelSeconds
@@ -128,5 +128,52 @@ describe("formatTravelDuration", () => {
 
   it("handles NaN gracefully", () => {
     expect(formatTravelDuration(NaN)).toBe("0 min");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// advanceClock
+// ---------------------------------------------------------------------------
+
+describe("advanceClock", () => {
+  beforeEach(() => {
+    game.user.isGM = true;
+    game.settings.get = vi.fn((mod, key) => {
+      if (key === "worldClockEnabled") return true;
+      if (key === "travelModes") return undefined;
+      return undefined;
+    });
+    game.time = { advance: vi.fn(async () => {}) };
+    ui.notifications.info = vi.fn();
+    canvas.grid.size = 100;
+    canvas.scene = {
+      ...canvas.scene,
+      grid: { distance: 5, units: "miles" },
+      getFlag: () => null
+    };
+  });
+
+  it("does nothing when user is not GM", async () => {
+    game.user.isGM = false;
+    await advanceClock(500, "walk-normal");
+    expect(game.time.advance).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when worldClockEnabled is off", async () => {
+    game.settings.get = vi.fn(() => false);
+    await advanceClock(500, "walk-normal");
+    expect(game.time.advance).not.toHaveBeenCalled();
+  });
+
+  it("advances game.time when enabled and mode is valid", async () => {
+    await advanceClock(300, "walk-normal");
+    expect(game.time.advance).toHaveBeenCalled();
+    expect(ui.notifications.info).toHaveBeenCalled();
+  });
+
+  it("does nothing when modeId is missing or invalid", async () => {
+    await advanceClock(300, null);
+    await advanceClock(300, "none");
+    expect(game.time.advance).not.toHaveBeenCalled();
   });
 });

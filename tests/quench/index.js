@@ -28,6 +28,7 @@ import { registerRegionBehaviorTests } from "./region-behavior.quench.js";
 import { registerPlayerRouteTests }    from "./player-route.quench.js";
 import { registerEncounterTests }      from "./encounters.quench.js";
 import { registerClockTests }          from "./clock.quench.js";
+import { registerPartyTests }          from "./party.quench.js";
 
 /**
  * Register every traveler Quench batch with the provided quench instance.
@@ -39,10 +40,5 @@ export function registerAllSuites(quench) {
   registerPlayerRouteTests(quench);
   registerEncounterTests(quench);
   registerClockTests(quench);
+  registerPartyTests(quench);
 }
-
-// Also register via the hook so the suites appear automatically when Quench
-// is loaded alongside the traveler module in a test world.
-Hooks.once("quenchReady", (quench) => {
-  registerAllSuites(quench);
-});
