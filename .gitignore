@@ -5,6 +5,7 @@ node_modules/
 
 # ── Test output ─────────────────────────────────────────────────────────────
 coverage/
+dist/
 playwright-traces/
 playwright-report/
 test-results/

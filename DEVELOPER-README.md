@@ -6,8 +6,13 @@
 
 ## Table of Contents
 
+- [Overview](#overview)
+- [Functional Areas](#functional-areas)
 - [Repository Structure](#repository-structure)
 - [Architecture Overview](#architecture-overview)
+  - [Component Model](#component-model)
+  - [Route Pipeline](#route-pipeline)
+  - [Sequence Diagrams](#sequence-diagrams)
 - [Key Design Decisions](#key-design-decisions)
 - [Module Entry Point & Lifecycle](#module-entry-point--lifecycle)
 - [Data Model](#data-model)
@@ -19,6 +24,39 @@
 - [Local CI Setup](#local-ci-setup)
 - [Remote CI (GitHub Actions)](#remote-ci-github-actions)
 - [Changelog Convention](#changelog-convention)
+
+---
+
+## Overview
+
+**Traveler** (`traveler`) is a Foundry VTT module (v13/v14) that lets a GM draw, save, animate, and share travel routes on the canvas. Routes use smooth dashed lines with animated dot or token movement, optional cinematic camera panning, path-following labels, sound playback, and travel-time/cost tooltips from configurable travel modes. Animation is synchronised across every connected client via Foundry's socket system.
+
+Beyond core route playback, Traveler adds player A* pathfinding (with optional GM approval), encounter zones along routes, world-clock advancement, party-based level-change checks, and region behaviors for elevation changes. The module is **system-agnostic** — no game-system API imports.
+
+There is **no build step** for day-to-day development: Foundry loads plain ES modules directly. An optional `npm run traveler:package` script produces a distributable zip under `dist/` (see [README.md](README.md)); that staging step strips the Quench test harness from the packaged copy only.
+
+---
+
+## Functional Areas
+
+| Area | Description |
+|------|-------------|
+| **Route Drawing** | GM clicks canvas waypoints; `IndyRouteTool` draws a live preview and saves the finished route to scene flags. |
+| **Smoothing** | Raw points are smoothed with Catmull-Rom (default) or Chaikin, then resampled at `sampleStepPx` to produce the runtime `path` array. |
+| **Rendering** | Animated dashed lines, moving dot/token sprite, cinematic pan/zoom, end-of-route X marker, and fade-in label — all via PIXI on `canvas.primary` or `canvas.effects`. |
+| **Label Rendering** | SVG `<textPath>` with fonts inlined as base64 data-URIs so curved text renders correctly as a PIXI texture. |
+| **Persistence** | Routes stored on the Scene document: `scene.setFlag("traveler", "routes", [...])`. Raw click-points (not the smoothed path) are persisted so routes can be re-smoothed later. |
+| **Multiplayer Sync** | Socket messages on `module.traveler` (`TRAVELER_ROUTE`, `TRAVELER_CLEAR_ROUTE`, `TRAVELER_CLEAR`, plus player/encounter/party types) propagate render, clear, pause, and check events. |
+| **Tile Export** | Off-screen PIXI `RenderTexture` → PNG → FilePicker upload → locked Tile overlay on the scene. |
+| **Route Manager UI** | ApplicationV2 panel: drag-to-reorder, play, preview, edit points/style, persist-to-tile, clear, delete, JSON import/export. |
+| **Settings UIs** | Global defaults, per-route style editor, travel mode CRUD, currency conversion CRUD, party config, scene distance override. |
+| **Travel Calculations** | Tooltips compute distance (pixels → scene units), travel time, and fare cost as multi-denomination currency strings. |
+| **Player Pathfinding** | Players click a destination; grid A* respects walls and fog-of-war; immediate or GM-approval playback modes. |
+| **Encounters** | Explicit, auto-interval, or fixed encounter zones along a route; table rolls, pause/resume sync, token/note/chat on accept. |
+| **World Clock** | Optional `game.time` advancement when a route finishes, using travel mode speed and per-scene distance override. |
+| **Party System** | Party tokens trigger distributed level-check rolls to each member; GM sees live status in `PartyCheckCollector`. |
+| **Region Behaviors** | `traveler.changeLevel` RegionBehaviorType for automatic or roll-gated elevation changes. |
+| **Public API** | `game.modules.get("traveler").api` exposes `drawRoute`, `createRoute`, `playRoute`, `drawRouteToTile`, `clearRoute`, `clearAllRoutes`, `listRoutes`, `getRouteByName`, `help`. |
 
 ---
 
@@ -38,8 +76,17 @@ traveler/
 │   ├── proposals.js              Ephemeral in-memory GM proposal store
 │   ├── encounters.js             Encounter zone logic, table rolling, resolution
 │   ├── clock.js                  World clock advance (computeTravelSeconds etc.)
+│   ├── party.js                  Party CRUD, lookups, PartyCheckSession store
 │   ├── smoothing.js              Catmull-Rom and Chaikin smoothing algorithms
 │   ├── label-renderer.js         Route label rendering (path-following text)
+│   ├── package-traveler.js       Build dist/traveler.zip (strips Quench from staged copy)
+│   ├── ci-bootstrap.js           Docker exec: verify dnd5e/Quench, join CI world
+│   ├── write-ci-env.js           Write .env for CI from GitHub secrets
+│   ├── run-quench.js             Playwright driver for Quench batches
+│   ├── foundry-playwright.js     Browser login + canvas readiness helpers
+│   ├── foundry-wait.js           Poll /api/status until Foundry is ready
+│   ├── world-clean.js            Reset tests/world/ to pristine state
+│   ├── load-env.js               Shared .env loader for Node scripts
 │   ├── apps/
 │   │   ├── manager.js            IndyRouteManager ApplicationV2 (Route Manager window)
 │   │   ├── settings-app.js       IndyRouteSettingsBase / IndyRouteEditor
@@ -56,7 +103,12 @@ traveler/
 │   └── pathfinding/
 │       ├── astar.js              Grid A* with binary min-heap priority queue
 │       └── fog-checker.js        Fog-of-war / vision cell check helpers
-├── templates/                    Handlebars templates for all ApplicationV2 dialogs
+├── templates/
+│   ├── route-manager.hbs
+│   ├── settings.hbs              Includes Encounters tab (partial: encounter-editor.hbs)
+│   ├── encounter-dialog.hbs
+│   ├── encounter-editor.hbs      Zone list/editor partial (embedded in settings.hbs)
+│   └── …                         party, scene-settings, level-check, etc.
 ├── tests/
 │   ├── setup.js                  Vitest global Foundry mocks (canvas, game, PIXI…)
 │   ├── unit/                     Vitest unit tests (no Foundry runtime required)
@@ -64,10 +116,15 @@ traveler/
 │   │   ├── change-level.test.js
 │   │   ├── clock.test.js
 │   │   ├── encounters.test.js
+│   │   ├── fog-checker.test.js
+│   │   ├── level-check-dialog.test.js
 │   │   ├── party.test.js
+│   │   ├── party-check-collector.test.js
 │   │   ├── player-speed.test.js
 │   │   ├── proposals.test.js
-│   │   └── settings.test.js
+│   │   ├── routes.test.js
+│   │   ├── settings.test.js
+│   │   └── smoothing.test.js
 │   ├── quench/                   Quench integration tests (run inside live Foundry)
 │   │   ├── index.js              Registers all batches
 │   │   ├── fixtures.js           SceneFixture + WallFixture — programmatic world data
@@ -81,19 +138,19 @@ traveler/
 │       └── world.json            Minimal world manifest for Docker CI
 ├── docs/
 │   ├── encounters.plan.md
+│   ├── party.plan.md
 │   ├── player-pathfinding.plan.md
+│   ├── region_change-level_behavior_aaf67ad6.plan.md
 │   ├── testing.plan.md
 │   └── travel-time.plan.md
 ├── docker/
-│   └── compose.test.yml          Docker Compose for local integration testing
-├── scripts/
-│   ├── run-quench.js             Playwright CI driver
-│   ├── foundry-wait.js           Polls /api/status until Foundry is ready
-│   └── world-clean.js            Resets tests/world/ to pristine state
+│   ├── compose.test.yml          Docker Compose for local/CI integration testing
+│   └── patches/                  Container startup scripts (dnd5e, Quench, permissions)
 ├── .github/workflows/ci.yml      GitHub Actions workflow
 ├── vitest.config.js
-├── package.json
+├── package.json                  npm scripts: test, foundry:*, traveler:package
 ├── .env.example
+├── DEVELOPER-README.md
 └── CHANGELOG.md
 ```
 
@@ -101,7 +158,308 @@ traveler/
 
 ## Architecture Overview
 
-### GM Route Playback
+Core route code still uses the `IndyRoute*` class prefix from the module's original name; the Foundry module id is `traveler`. The diagrams below use current socket type strings and flag namespaces.
+
+### Component Model
+
+```mermaid
+classDiagram
+    direction TB
+
+    class TravelerModule {
+        +Hooks.once("init")
+        +Hooks.on("getSceneControlButtons")
+        +Hooks.once("ready")
+        -buildRoutePayload(options) Object
+        -applyRouteOverrides(settings, options) Object
+        -resolveSettings(settings) Object
+        +api: TravelerAPI
+    }
+
+    class TravelerAPI {
+        +drawRoute(options) routeId|null
+        +createRoute(options) Promise~routeId|null~
+        +playRoute(routeId, options) routeId|null
+        +drawRouteToTile(routeIdOrOptions, options) Promise~Tile|null~
+        +clearRoute(routeId) void
+        +clearAllRoutes() void
+        +listRoutes(sceneId?) RouteRecord[]
+        +getRouteByName(name, sceneId?) RouteRecord|null
+        +help() Object
+    }
+
+    class SettingsModule {
+        <<module>>
+        +MODULE_ID: string
+        +DEFAULTS: RouteSettings
+        +getTravelModes() TravelMode[]
+        +applyMapScaling(settings, sizeOverride?) RouteSettings
+        +normalizeSettings(settings) RouteSettings
+    }
+
+    class SmoothingModule {
+        <<module>>
+        +chaikin(points, iterations, closed?) Point[]
+        +catmullRom(points, samplesPerSegment, alpha) Point[]
+    }
+
+    class RoutesModule {
+        <<module>>
+        +buildRouteFromPoints(points, baseSettings) BuiltRoute
+        +getSceneRoutes(scene?) RouteRecord[]
+        +setSceneRoutes(routes, scene?) Promise~void~
+        +createRouteRecord(points, baseSettings, name) RouteRecord
+    }
+
+    class IndyRouteTool {
+        <<singleton>>
+        +start(options) void
+        +clearAllBroadcast() void
+        -finishAndBroadcast() void
+    }
+
+    class IndyRouteRenderer {
+        <<singleton>>
+        +render(payload) void
+        +renderStatic(path, settings, routeId, labelText, options?) void
+        +pauseRoute(routeId) void
+        +resumeRoute(routeId) void
+        +persistRouteToTile(path, settings, options?) Promise~Tile|null~
+        +clearRoute(routeId) void
+    }
+
+    class IndyRouteLabelRenderer {
+        +drawLabel(container, path, settings, text, options?) Promise~LabelResult~
+        +computeLabelSpanInfo(path, settings, text) SpanInfo|null
+    }
+
+    class IndyRouteManager {
+        <<ApplicationV2>>
+        +static show() IndyRouteManager
+        -_playRoute(routeId) void
+        -_persistRoute(routeId) Promise~void~
+    }
+
+    class PlayerRouteTool {
+        <<singleton>>
+        +start(options) void
+        -pathfind and propose or play
+    }
+
+    class EncountersModule {
+        <<module>>
+        +checkZones(tPrev, t, zones) EncounterZone|null
+        +handleZoneFired(zone, travelModeId) void
+    }
+
+    class ClockModule {
+        <<module>>
+        +advanceClock(payload) void
+        +computeTravelSeconds(path, settings) number
+    }
+
+    class ProposalStore {
+        <<in-memory GM>>
+        +add(proposal) void
+        +remove(id) void
+    }
+
+    class PartyModule {
+        <<module>>
+        +getParties() PartyRecord[]
+        +getPartyForToken(tokenDoc) PartyRecord|null
+        +PartyCheckSession.create(opts) PartyCheckSession
+        +resolvePartyCheck(session) void
+    }
+
+    TravelerModule --> TravelerAPI : exposes at game.modules api
+    TravelerModule --> IndyRouteTool : GM toolbar
+    TravelerModule --> PlayerRouteTool : player toolbar
+    TravelerModule --> IndyRouteManager : GM toolbar
+    TravelerModule --> IndyRouteRenderer : socket handlers
+
+    TravelerAPI --> RoutesModule
+    TravelerAPI --> IndyRouteRenderer
+
+    IndyRouteManager --> RoutesModule : CRUD
+    IndyRouteManager --> IndyRouteRenderer : play / preview / persist
+
+    IndyRouteTool --> RoutesModule : buildRouteFromPoints
+    PlayerRouteTool --> RoutesModule
+
+    IndyRouteRenderer --> IndyRouteLabelRenderer
+    IndyRouteRenderer --> EncountersModule : via globalThis at tick
+    IndyRouteRenderer --> ClockModule : via globalThis on finish
+    TravelerChangeLevelBehavior --> PartyModule : party check sessions
+
+    RoutesModule --> SmoothingModule
+    RoutesModule --> SettingsModule
+```
+
+Encounter and clock helpers are attached on `globalThis` in `traveler.js` to avoid circular imports with `renderer.js` (see [Key Design Decisions](#key-design-decisions)).
+
+### Route Pipeline
+
+```mermaid
+flowchart TD
+    A[GM clicks canvas points] --> B[IndyRouteTool stores raw points]
+    B --> C[buildRouteFromPoints]
+    C --> D{smoothingMode}
+    D -- catmull --> E[catmullRom]
+    D -- chaikin --> F[chaikin]
+    D -- none --> G[raw points]
+    E & F & G --> H[applyMapScaling]
+    H --> I[applyColorNumbers]
+    I --> J[resample at sampleStepPx]
+    J --> K["path: Point array"]
+
+    K --> L{Destination}
+    L -- play/broadcast --> M["socket.emit TRAVELER_ROUTE"]
+    L -- static preview --> N["IndyRouteRenderer.renderStatic"]
+    L -- persist to scene --> O["scene.setFlag traveler.routes"]
+    L -- export to tile --> P["IndyRouteRenderer.persistRouteToTile"]
+
+    M --> Q["All clients: IndyRouteRenderer.render"]
+    Q --> R[PIXI Ticker animation loop]
+    R --> S[drawDashedSegment per frame]
+    R --> T[updateMarker dot/token/sprite]
+    R --> U[panToPosition cinematic camera]
+    R --> V[IndyRouteLabelRenderer.drawLabel]
+    R --> W[GM: checkZones + advanceClock on finish]
+
+    O --> X["scene.getFlag routes"]
+    X --> Y[IndyRouteManager list view]
+```
+
+### Sequence Diagrams
+
+#### GM draws and saves a route
+
+```mermaid
+sequenceDiagram
+    actor GM
+    participant Manager as IndyRouteManager
+    participant Tool as IndyRouteTool
+    participant Routes as routes.js
+    participant Renderer as IndyRouteRenderer
+
+    GM->>Manager: clicks "Draw Route"
+    Manager->>Tool: start({ autoPlay:false, onComplete })
+    Tool-->>GM: notification "Left-click points…"
+
+    loop Click each waypoint
+        GM->>Tool: pointerdown on canvas
+        Tool->>Tool: drawPreview()
+    end
+
+    GM->>Tool: double-click or Enter
+    Tool->>Routes: buildRouteFromPoints(points, baseSettings)
+    Routes->>Routes: normalizeSettings → smooth → applyMapScaling → resample
+    Routes-->>Tool: { path, settings, smoothPoints }
+
+    Tool->>Tool: onComplete({ points, baseSettings, built })
+    Manager->>Routes: createRouteRecord + setSceneRoutes
+    Manager->>Renderer: renderStatic(path, settings, id, name)
+    Manager->>Manager: render(true) [refresh list]
+```
+
+#### Playing a saved route (multi-client)
+
+```mermaid
+sequenceDiagram
+    actor GM
+    participant Manager as IndyRouteManager
+    participant Routes as routes.js
+    participant Socket as game.socket
+    participant Renderer_GM as IndyRouteRenderer (GM)
+    participant Renderer_P as IndyRouteRenderer (Player)
+    participant LabelR as IndyRouteLabelRenderer
+    participant PIXI as PIXI Ticker
+
+    GM->>Manager: clicks "Play"
+    Manager->>Routes: buildRouteFromPoints(route.points, route.settings)
+    Manager->>Socket: emit TRAVELER_CLEAR_ROUTE { routeId }
+    Manager->>Socket: emit TRAVELER_ROUTE payload with startTime
+    Socket-->>Renderer_P: on module.traveler → render(payload)
+    Manager->>Renderer_GM: render(payload) [emit does not loop to sender]
+
+    par GM canvas
+        Renderer_GM->>PIXI: ticker.add(onTick)
+        loop Every frame
+            Renderer_GM->>Renderer_GM: drawDashedSegment + updateMarker
+            opt label threshold
+                Renderer_GM->>LabelR: drawLabel → SVG textPath texture
+            end
+            Renderer_GM->>Renderer_GM: checkZones (encounters, GM only)
+        end
+        Renderer_GM->>Renderer_GM: finish → advanceClock (if enabled)
+    and Player canvas
+        Renderer_P->>Renderer_P: same animation (no encounter/clock side effects)
+    end
+```
+
+#### Persist route to tile
+
+```mermaid
+sequenceDiagram
+    actor GM
+    participant Manager as IndyRouteManager
+    participant Renderer as IndyRouteRenderer
+    participant LabelR as IndyRouteLabelRenderer
+    participant PIXI_RT as PIXI RenderTexture
+    participant FilePicker as Foundry FilePicker
+    participant Scene as canvas.scene
+
+    GM->>Manager: clicks "Persist to Tile"
+    Manager->>Renderer: persistRouteToTile(path, settings, { includeEndX, labelText })
+    Renderer->>PIXI_RT: render off-screen container to RenderTexture
+    Renderer->>LabelR: drawLabel on offset path
+    Renderer->>FilePicker: uploadBase64 PNG to data/traveler/
+    Renderer->>Scene: createEmbeddedDocuments("Tile", [{ texture.src }])
+    Renderer-->>Manager: Tile document
+```
+
+#### Edit route style (live preview)
+
+```mermaid
+sequenceDiagram
+    actor GM
+    participant Manager as IndyRouteManager
+    participant Editor as IndyRouteEditor
+    participant Routes as routes.js
+    participant Renderer as IndyRouteRenderer
+
+    GM->>Manager: clicks "Edit Style"
+    Manager->>Editor: new IndyRouteEditor(route, { onSave })
+    loop Preview changes
+        GM->>Editor: changes a setting
+        Editor->>Routes: buildRouteFromPoints(route.points, draftSettings)
+        Editor->>Renderer: renderStatic(path, settings, routeId, name)
+    end
+    GM->>Editor: Save
+    Manager->>Routes: setSceneRoutes(updatedRoutes)
+    Manager->>Renderer: renderStatic(built.path, built.settings, id, name)
+```
+
+#### Public API — macro triggers a route
+
+```mermaid
+sequenceDiagram
+    actor Macro
+    participant API as TravelerAPI
+    participant Routes as routes.js
+    participant Socket as game.socket
+    participant Renderer as IndyRouteRenderer
+
+    Macro->>API: game.modules.get("traveler").api.playRoute(routeId, options)
+    API->>Routes: getSceneRoutes → buildRouteFromPoints
+    API->>Renderer: clearRoute(routeId)
+    API->>Socket: emit TRAVELER_CLEAR_ROUTE + TRAVELER_ROUTE
+    API->>Renderer: render(payload)
+    API-->>Macro: routeId
+```
+
+#### GM route playback (encounters & clock)
 
 ```mermaid
 sequenceDiagram
@@ -124,7 +482,7 @@ sequenceDiagram
     end
 ```
 
-### Player Proposal Flow
+#### Player proposal flow
 
 ```mermaid
 sequenceDiagram
@@ -152,7 +510,7 @@ sequenceDiagram
     end
 ```
 
-### Encounter Zone Resolution
+#### Encounter zone resolution
 
 ```mermaid
 sequenceDiagram
@@ -189,6 +547,17 @@ sequenceDiagram
 
 ## Key Design Decisions
 
+### Core route engine
+
+| Decision | Rationale |
+|----------|-----------|
+| **Store raw click-points, not smoothed path** | Allows re-smoothing with different algorithms without data loss; map-scaling is re-applied at play-time so routes render correctly at any zoom. |
+| **Socket emit does not loop back to sender** | Foundry's socket `emit` does not deliver to the originating client; `IndyRouteRenderer.render()` is called explicitly on the GM's client after every `emit`. |
+| **`window.__travelerBroadcast` registry** | Tracks active PIXI containers across render calls without a module singleton that could be lost on hot-reload. |
+| **SVG textPath for labels** | PIXI text cannot follow a curve. An SVG data-URI is rasterised to a texture; fonts are fetched and inlined so off-document SVG can access them. |
+| **`lingerMs: -1` means persist forever** | Positive values schedule destroy after animation; `-1` keeps the route overlay on the canvas indefinitely. |
+| **`scaleMapSize` snapshot in `createRouteRecord`** | When `scaleWithMap` is enabled, current map pixel dimensions are saved so scaling can be reproduced identically at playback. |
+
 ### System-agnostic core
 
 The module does not import any game-system API. All system-specific logic is:
@@ -208,7 +577,8 @@ packet delay.
 ### ESM throughout; no build step
 
 All source files use native ES modules (`type: "module"` in `module.json`). Foundry v14 loads
-them directly. There is no bundler, no transpile step, no `dist/` directory.
+them directly. There is no bundler or transpile step in the dev loop. Optional packaging to
+`dist/traveler.zip` copies runtime files only and does not change repo source.
 
 ### Circular import avoidance via `globalThis`
 
@@ -280,6 +650,21 @@ destination.
 | `init` | Register region behavior; register module settings; pre-load templates; expose encounter and clock helpers on `globalThis` |
 | `getSceneControlButtons` | Add GM and player toolbar buttons |
 | `ready` | Expose the public API (`game.modules.get("traveler").api`); register socket handlers; expose PlayerRouteTool globally; register Quench suites if Quench is active |
+
+### Registered settings (world)
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `routeSettings` | Object | Global default route visual/animation settings |
+| `travelModes` | Array | Travel mode definitions (speed, cost) |
+| `currencyConversions` | Array | Multi-denomination currency display |
+| `parties` | Array | Party groups (token + members + resolution mode) |
+| `ignoreCurrencies` | Boolean | Skip currency formatting in tooltips |
+| `playerRouteMode` | String | `"immediate"` or `"approval"` for player pathfinding |
+| `worldClockEnabled` | Boolean | Advance `game.time` when routes finish |
+| `playerSpeedPrompt` | Boolean | Show speed picker before player route submit |
+
+Scene-level flags (not settings): `traveler.routes`, `traveler.sceneDistance`.
 
 ---
 
@@ -440,9 +825,15 @@ Pure functions are tested without any mocking. Functions that call `game.*` use 
 | `change-level.test.js` | Region behavior prerequisite checks, elevation resolution |
 | `clock.test.js` | `computeTravelSeconds`, `formatTravelDuration` edge cases |
 | `encounters.test.js` | `checkZones` (explicit, auto, fixed, t=0 boundary), `buildFixedResult` |
+| `fog-checker.test.js` | Fog-of-war / explored cell helpers |
+| `level-check-dialog.test.js` | Level-check dialog roll/submit logic |
+| `party.test.js` | Party CRUD, `getPartyForToken`, resolution helpers |
+| `party-check-collector.test.js` | GM collector UI state from session |
 | `player-speed.test.js` | `scaleDrawSpeed`, `encounterMult` coverage, `getTravelModeById` |
 | `proposals.test.js` | `ProposalStore` CRUD, snapshots, deduplication |
+| `routes.test.js` | `buildRouteFromPoints`, resampling, scene flag CRUD |
 | `settings.test.js` | `normalizeSettings`, `applyColorNumbers`, `getPlayerRouteMode` |
+| `smoothing.test.js` | Catmull-Rom and Chaikin output |
 
 ---
 
@@ -462,8 +853,11 @@ inside Docker. Playwright handles login, world load, test execution, and result 
 | `traveler.integration.pathfinding` | A* on a live canvas with real walls and regions |
 | `traveler.integration.regionBehavior` | `traveler.changeLevel` behavior checks |
 | `traveler.integration.playerRoute` | Player route proposal → approval → playback |
+| `traveler.integration.party` | Party token level-check dispatch and resolution |
 | `traveler.integration.encounters` | Zone checks, note creation, chat messages, EncounterDialog |
 | `traveler.integration.clock` | `advanceClock` against `game.time`, scene flag override |
+
+Quench batches use `integrationBatch()` from `fixtures.js` (180s suite timeout) because CI runners exceed Quench's default 2000ms per test.
 
 ---
 
@@ -521,20 +915,28 @@ npm run test:inspect
 # 8. Reset world data when done inspecting
 npm run world:clean
 
-# 9. Stop the container
-npm run foundry:down
+# 9. Stop the container (or pause without destroying it)
+npm run foundry:stop          # pause — keeps container filesystem (license, installs)
+npm run foundry:start         # resume paused container
+npm run foundry:logs          # tail Foundry logs
 
-# 10. Full reset (also wipes named volume — requires re-activation)
-npm run foundry:down:clean
+# 10. Full teardown
+npm run foundry:down          # remove container (bind-mounted world data kept on disk)
+npm run foundry:down:clean    # same as down (no named volumes in current compose)
+npm run foundry:reset         # down:clean + up + logs — fresh container boot
 ```
 
-**Named volumes:**
+**Persistence model:**
 
-The `foundry-data` named volume persists Foundry's config, user accounts, and module installs
-between `foundry:up` / `foundry:down` cycles. Only `foundry:down:clean` destroys it.
+Docker Compose does **not** use a named `foundry-data` volume (removed to avoid Windows/WSL permission issues). Foundry config and module installs live in the **container filesystem** until the container is removed. Use `foundry:stop` / `foundry:start` to pause without re-downloading; use `foundry:reset` for a clean container.
 
-The `tests/world/` bind mount persists world data (scenes, actors, DB files) to the local
-filesystem. The world.json manifest is tracked by git; all other files are git-ignored.
+The `tests/world/` bind mount persists world data (scenes, actors, DB files) on the host. The `world.json` manifest is tracked by git; generated world files are git-ignored.
+
+**Package for distribution:**
+
+```powershell
+npm run traveler:package      # → dist/traveler.zip (Quench stripped from staged copy only)
+```
 
 ---
 

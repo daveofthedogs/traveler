@@ -20,7 +20,8 @@
     "foundry:down": "docker compose --env-file .env -f docker/compose.test.yml down",
     "foundry:down:clean": "docker compose --env-file .env -f docker/compose.test.yml down -v",
     "foundry:reset": "npm run foundry:down:clean && npm run foundry:up && npm run foundry:logs",
-    "world:clean": "node scripts/world-clean.js"
+    "world:clean": "node scripts/world-clean.js",
+    "traveler:package": "node scripts/package-traveler.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
