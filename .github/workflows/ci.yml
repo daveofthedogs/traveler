@@ -22,6 +22,9 @@ on:
 permissions:
   contents: read
 
+env:
+  OSV_SCANNER_VERSION: v2.3.8
+
 # ---------------------------------------------------------------------------
 # Job 1 — Dependency audit (npm advisory DB + OSV lockfile scan)
 # ---------------------------------------------------------------------------
@@ -46,11 +49,15 @@ jobs:
       - name: npm audit (fail on high or critical)
         run: npm run audit:ci
 
+      - name: Install OSV-Scanner
+        run: |
+          curl -sSfL -o osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          chmod +x osv-scanner
+          sudo mv osv-scanner /usr/local/bin/osv-scanner
+
       - name: OSV-Scanner (lockfile)
-        uses: google/osv-scanner-action/osv-scanner-action@v2
-        with:
-          scan-args: |-
-            --lockfile=package-lock.json
+        run: osv-scanner --lockfile=package-lock.json
 
   dependency-review:
     name: Dependency Review (PRs)

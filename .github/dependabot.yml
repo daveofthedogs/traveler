@@ -1,0 +1,19 @@
+# Dependabot version updates for devDependencies (Vitest, Playwright, etc.).
+# Security updates and malware alerts are configured in GitHub repo settings;
+# Dependabot will open grouped security PRs when advisories match package-lock.json.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
