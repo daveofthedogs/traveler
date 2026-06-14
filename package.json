@@ -5,6 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "audit:ci": "npm audit --audit-level=high",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

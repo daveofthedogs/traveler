@@ -950,8 +950,21 @@ Workflow: `.github/workflows/ci.yml`
 
 | Job | Runner | What it does |
 |---|---|---|
+| `dependency-audit` | `ubuntu-latest` | `npm ci`, `npm run audit:ci` (high+), OSV-Scanner CLI on `package-lock.json` |
+| `dependency-review` | `ubuntu-latest` | PRs only — fails if the PR introduces high+ severity dependency changes |
 | `unit-tests` | `ubuntu-latest` | `npm ci && npm test` — fast, no Docker |
 | `integration-tests` | `ubuntu-latest` | Spins up Docker Compose, waits for Foundry, runs Quench via Playwright |
+
+**Dependabot** (`.github/dependabot.yml` + repo security settings): weekly npm version PRs (grouped minor/patch), plus security/malware alerts from GitHub. Merge Dependabot PRs only after CI passes.
+
+Run the same audit locally before pushing:
+
+```powershell
+npm ci
+npm run audit:ci
+```
+
+Note: npm dependencies are **dev-only** (Vitest, Playwright). The packaged Foundry module (`traveler:package`) does not ship `node_modules`; scans protect CI and developer machines, not end-user Foundry installs.
 
 **Secrets required** (set in GitHub → Settings → Secrets → Actions):
 
