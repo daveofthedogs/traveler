@@ -66,8 +66,10 @@ export function registerEncounterTests(quench) {
       });
 
       // ----------------------------------------------------------------
-      describe("createNote — live NoteDocument creation", () => {
-        it("creates a NoteDocument on the active scene", async () => {
+      describe("createNote — live NoteDocument creation", function() {
+        this.timeout(30_000);
+
+        it("creates a NoteDocument on the active scene", async function() {
           const result = {
             name:      "Test Encounter",
             img:       null,
@@ -169,8 +171,10 @@ export function registerEncounterTests(quench) {
       });
 
       // ----------------------------------------------------------------
-      describe("EncounterDialog — open and resolve", () => {
-        it("resolves 'decline' when close() is called without choosing", async () => {
+      describe("EncounterDialog — open and resolve", function() {
+        this.timeout(30_000);
+
+        it("resolves 'decline' when close() is called without choosing", async function() {
           const { EncounterDialog } = await import("../../scripts/apps/encounter-dialog.js");
           const zone = createEncounterZone("explicit", {
             label: "CI Test Zone",

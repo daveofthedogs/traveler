@@ -81,8 +81,10 @@ export function registerRegionBehaviorTests(quench) {
         });
       });
 
-      describe("Elevation update on token", () => {
-        it("_applyElevation sets token elevation to targetElevation", async () => {
+      describe("Elevation update on token", function() {
+        this.timeout(30_000);
+
+        it("_applyElevation sets token elevation to targetElevation", async function() {
           const api = makeLiveBehavior();
 
           const initialElevation = ctx.token.elevation ?? 0;

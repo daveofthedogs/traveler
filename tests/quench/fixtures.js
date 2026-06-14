@@ -11,6 +11,9 @@
  *   after(async  () => { await ctx.teardown(); });
  */
 
+/** Default Mocha timeout for Quench integration tests (ms). CI runners are slower than local. */
+export const QUENCH_TEST_TIMEOUT = 30_000;
+
 /**
  * Run SceneFixture.build with a Mocha timeout suited to Foundry document I/O.
  * @param {Mocha.Context} hook

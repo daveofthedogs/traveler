@@ -115,6 +115,8 @@ export class EncounterDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   async close(options = {}) {
     // Always resolve so callers aren't left hanging if the window is closed
     this._settle("decline");
-    return super.close(options);
+    if (this.rendered) {
+      return super.close(options);
+    }
   }
 }
