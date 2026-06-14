@@ -9,7 +9,7 @@
  * Registered by tests/quench/index.js.
  */
 
-import { SceneFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture } from "./fixtures.js";
 import { ProposalStore } from "../../scripts/proposals.js";
 import { PLAYER_ROUTE_MODE } from "../../scripts/settings.js";
 import { MSG } from "../../scripts/constants.js";
@@ -25,8 +25,8 @@ export function registerPlayerRouteTests(quench) {
 
       let ctx;
 
-      before(async () => {
-        ctx = await SceneFixture.build();
+      before(async function() {
+        ctx = await buildSceneFixture(this);
         ProposalStore.clear();
       });
 

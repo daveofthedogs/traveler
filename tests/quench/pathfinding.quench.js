@@ -7,8 +7,8 @@
  * Registered by tests/quench/index.js.
  */
 
-import { SceneFixture, WallFixture } from "./fixtures.js";
-import { findPath } from "../../scripts/pathfinding/astar.js";
+import { SceneFixture, buildSceneFixture, WallFixture } from "./fixtures.js";
+import { findPath, isWallBlocked } from "../../scripts/pathfinding/astar.js";
 
 export function registerPathfindingTests(quench) {
   quench.registerBatch(
@@ -18,8 +18,8 @@ export function registerPathfindingTests(quench) {
 
       let ctx;
 
-      before(async () => {
-        ctx = await SceneFixture.build();
+      before(async function() {
+        ctx = await buildSceneFixture(this);
       });
 
       after(async () => {
@@ -80,17 +80,32 @@ export function registerPathfindingTests(quench) {
           // Create a complete box around destination
           const { scene } = ctx;
           const x0 = 800, y0 = 800, x1 = 900, y1 = 900;
-          const walls = await Promise.all([
-            WallDocument.create({ c: [x0, y0, x1, y0], move: 1 }, { parent: scene }),
-            WallDocument.create({ c: [x1, y0, x1, y1], move: 1 }, { parent: scene }),
-            WallDocument.create({ c: [x1, y1, x0, y1], move: 1 }, { parent: scene }),
-            WallDocument.create({ c: [x0, y1, x0, y0], move: 1 }, { parent: scene })
+          const origin = { x: 50, y: 50 };
+          const dest   = { x: 850, y: 850 };
+
+          const walls = await scene.createEmbeddedDocuments("Wall", [
+            { c: [x0, y0, x1, y0], move: 1 },
+            { c: [x1, y0, x1, y1], move: 1 },
+            { c: [x1, y1, x0, y1], move: 1 },
+            { c: [x0, y1, x0, y0], move: 1 }
           ]);
 
-          const path = findPath({ x: 50, y: 50 }, { x: 850, y: 850 }, { maxNodes: 500 });
+          if (typeof canvas.scene?.initializeEdges === "function") {
+            await canvas.scene.initializeEdges();
+          } else if (typeof canvas.walls?.setWalls === "function") {
+            canvas.walls.setWalls(canvas.scene.walls);
+          } else {
+            canvas.walls?.refresh?.();
+          }
 
-          // Clean up extra walls
-          await Promise.all(walls.map((w) => w.delete()));
+          assert.ok(
+            isWallBlocked(origin, dest),
+            "direct route into the box should be blocked by walls"
+          );
+
+          const path = findPath(origin, dest, { maxNodes: 500 });
+
+          await scene.deleteEmbeddedDocuments("Wall", walls.map((w) => w.id));
 
           // Destination inside box — path should not reach it
           if (path.length > 0) {

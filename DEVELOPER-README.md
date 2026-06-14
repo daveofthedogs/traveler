@@ -497,31 +497,34 @@ documents. Teardown is skipped when `window.TRAVELER_KEEP_WORLD === true` (inspe
 Copy-Item .env.example .env
 # edit .env with your FOUNDRY_LICENSE_KEY, FOUNDRY_ADMIN_KEY, FOUNDRY_USERNAME, FOUNDRY_PASSWORD
 
-# 2. Start Foundry in Docker
-npm run foundry:up        # docker compose -f docker/compose.test.yml up -d
+# 2. Install dependencies and Playwright browser (one-time)
+npm ci
+npm run playwright:install
 
-# 3. Wait for Foundry to finish initialising (~2-3 min on first run)
+# 3. Start Foundry in Docker
+npm run foundry:up
+
+# 4. Wait for Foundry to finish initialising (~2-3 min on first run)
 npm run foundry:wait
 
-# 4. Bootstrap dependencies (dnd5e + verify Quench)
-# Quench is auto-installed via docker/patches/10-install-quench.sh on container start.
-# dnd5e is downloaded via Foundry Setup (Playwright).
+# 5. Bootstrap dependencies (verify dnd5e + Quench, join CI world)
+# dnd5e and Quench are auto-installed via docker/patches/ at container start.
 npm run foundry:bootstrap
 
-# 5. Run integration tests
+# 6. Run integration tests
 npm run test:integration
 
-# 6. (Optional) inspect mode — keeps test data in the world
+# 7. (Optional) inspect mode — keeps test data in the world
 npm run test:inspect
 # Then open http://localhost:30000 and log in as GM
 
-# 7. Reset world data when done inspecting
+# 8. Reset world data when done inspecting
 npm run world:clean
 
-# 8. Stop the container
+# 9. Stop the container
 npm run foundry:down
 
-# 9. Full reset (also wipes named volume — requires re-activation)
+# 10. Full reset (also wipes named volume — requires re-activation)
 npm run foundry:down:clean
 ```
 

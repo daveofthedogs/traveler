@@ -42,9 +42,3 @@ export function registerAllSuites(quench) {
   registerClockTests(quench);
   registerPartyTests(quench);
 }
-
-// Also register via the hook so the suites appear automatically when Quench
-// is loaded alongside the traveler module in a test world.
-Hooks.once("quenchReady", (quench) => {
-  registerAllSuites(quench);
-});

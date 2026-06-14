@@ -7,11 +7,53 @@
  * Usage:
  *   import { SceneFixture } from "./fixtures.js";
  *
- *   before(async () => { ctx = await SceneFixture.build(); });
+ *   before(async function() { ctx = await buildSceneFixture(this); });
  *   after(async  () => { await ctx.teardown(); });
  */
 
+/**
+ * Run SceneFixture.build with a Mocha timeout suited to Foundry document I/O.
+ * @param {Mocha.Context} hook
+ */
+export async function buildSceneFixture(hook) {
+  hook.timeout(180_000);
+  return SceneFixture.build();
+}
+
 const MODULE_ID = "traveler";
+
+/** Foundry create APIs sometimes return a document or a one-element array. */
+function unwrapDoc(doc) {
+  return Array.isArray(doc) ? doc[0] : doc;
+}
+
+/** Load `scene` on the live canvas so pathfinding and region APIs are available. */
+async function activateSceneOnCanvas(scene) {
+  if (canvas.scene?.id !== scene.id) {
+    await scene.view();
+  }
+  if (!canvas.ready) {
+    await new Promise((resolve) => Hooks.once("canvasReady", resolve));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+}
+
+/**
+ * Resolve a traveler.changeLevel behavior on a region (canvas-backed when possible).
+ * @param {RegionDocument} regionDoc
+ * @returns {import("../../scripts/behaviors/change-level.js").TravelerChangeLevelBehavior|null}
+ */
+export function getChangeLevelBehavior(regionDoc) {
+  const doc = unwrapDoc(regionDoc);
+  if (!doc?.id) return null;
+
+  const sceneId = doc.parent?.id ?? doc.scene?.id ?? canvas.scene?.id;
+  const scene = game.scenes?.get?.(sceneId);
+  const region = scene?.regions?.get?.(doc.id) ?? doc;
+  const raw = region.behaviors?.contents ?? region.behaviors ?? [];
+  const list = Array.isArray(raw) ? raw : [...raw];
+  return list.find((b) => b.type === `${MODULE_ID}.changeLevel`) ?? null;
+}
 
 // ---------------------------------------------------------------------------
 // SceneFixture
@@ -48,29 +90,30 @@ export const SceneFixture = {
     });
 
     await scene.update({ active: true });
+    await activateSceneOnCanvas(scene);
 
     // ------------------------------------------------------------------
     // Walls
     // ------------------------------------------------------------------
 
     // Vertical wall at x = 300, full height — splits left and right areas
-    const wall = await WallDocument.create(
+    const wall = unwrapDoc(await WallDocument.create(
       { c: [300, 0, 300, 1000], move: CONST.WALL_MOVEMENT_TYPES?.NORMAL ?? 1 },
       { parent: scene }
-    );
+    ));
 
     // A gap in the wall at y = 400–500 (one grid cell) allows passage
-    const wallGap = await WallDocument.create(
+    const wallGap = unwrapDoc(await WallDocument.create(
       { c: [300, 500, 300, 1000], move: CONST.WALL_MOVEMENT_TYPES?.NORMAL ?? 1 },
       { parent: scene }
-    );
+    ));
 
     // ------------------------------------------------------------------
     // Regions
     // ------------------------------------------------------------------
 
     // Stairs region — automatic pass, elevation 10
-    const cliffRegion = await RegionDocument.create({
+    const cliffRegion = unwrapDoc(await RegionDocument.create({
       name: "Stairwell",
       shapes: [{
         type:   "rectangle",
@@ -78,19 +121,11 @@ export const SceneFixture = {
         y:      0,
         width:  100,
         height: 1000
-      }],
-      behaviors: [{
-        type: `${MODULE_ID}.changeLevel`,
-        system: {
-          mode:            "stairs",
-          targetElevation: 10,
-          requiresCheck:   false
-        }
       }]
-    }, { parent: scene });
+    }, { parent: scene }));
 
     // Cliff region — requires a roll check, DC 1 (always passes with 1d20)
-    const checkRegion = await RegionDocument.create({
+    const checkRegion = unwrapDoc(await RegionDocument.create({
       name: "Cliff Face",
       shapes: [{
         type:   "rectangle",
@@ -98,28 +133,40 @@ export const SceneFixture = {
         y:      0,
         width:  100,
         height: 1000
-      }],
-      behaviors: [{
-        type: `${MODULE_ID}.changeLevel`,
-        system: {
-          mode:            "cliff",
-          targetElevation: 30,
-          requiresCheck:   true,
-          checkLabel:      "Climb Check",
-          checkFormula:    "1d20",
-          checkDC:         1,      // DC 1 — virtually always succeeds
-          failureDamage:   "",
-          allowRetry:      false
-        }
       }]
-    }, { parent: scene });
+    }, { parent: scene }));
+
+    const cliffCreated = await cliffRegion.createEmbeddedDocuments("RegionBehavior", [{
+      type: `${MODULE_ID}.changeLevel`,
+      system: {
+        mode:            "stairs",
+        targetElevation: 10,
+        requiresCheck:   false
+      }
+    }]);
+    const cliffBehavior = unwrapDoc(cliffCreated);
+
+    const checkCreated = await checkRegion.createEmbeddedDocuments("RegionBehavior", [{
+      type: `${MODULE_ID}.changeLevel`,
+      system: {
+        mode:            "cliff",
+        targetElevation: 30,
+        requiresCheck:   true,
+        checkLabel:      "Climb Check",
+        checkFormula:    "1d20",
+        checkDC:         1,
+        failureDamage:   "",
+        allowRetry:      false
+      }
+    }]);
+    const checkBehavior = unwrapDoc(checkCreated);
 
     // ------------------------------------------------------------------
     // Token
     // ------------------------------------------------------------------
 
     // Place a basic actor-less token the test can control
-    const token = await TokenDocument.create({
+    const token = unwrapDoc(await TokenDocument.create({
       name:      "CI Hero",
       x:         50,
       y:         400,
@@ -127,7 +174,7 @@ export const SceneFixture = {
       height:    1,
       actorId:   null,
       elevation: 0
-    }, { parent: scene });
+    }, { parent: scene }));
 
     // ------------------------------------------------------------------
     // Teardown helper
@@ -139,6 +186,8 @@ export const SceneFixture = {
       wallGap,
       cliffRegion,
       checkRegion,
+      cliffBehavior,
+      checkBehavior,
       token,
       /**
        * Delete all created documents.

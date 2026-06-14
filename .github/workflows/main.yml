@@ -85,19 +85,20 @@ jobs:
         uses: battila7/get-version-action@v2
 
 
-      # Modify "module.json" with values specific to the release.
-      # Since the values for the "version" and "url" keys aren't known ahead of
-      # time, the manifest file in the repository is updated with these values.
-      #
-      # While this does modify the manifest file in-place, the changes are not
-      # commited to the repository, and only exist in the action's filesystem.
-      - name: Modify Module Manifest With Release-Specific Values
-        id: sub_manifest_link_version
-        uses: cschleiden/replace-tokens@v1
-        with:
-          files: 'module.json'
+      # Patch module.json with release-specific version and distribution URLs.
+      - name: Patch Module Manifest For Release
+        run: |
+          node <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const manifest = JSON.parse(readFileSync("module.json", "utf8"));
+          manifest.version = process.env.VERSION;
+          manifest.url = process.env.URL;
+          manifest.manifest = process.env.MANIFEST;
+          manifest.download = process.env.DOWNLOAD;
+          writeFileSync("module.json", `${JSON.stringify(manifest, null, 2)}\n`);
+          EOF
         env:
-          VERSION: ${{steps.get_version.outputs.version-without-v}}
+          VERSION: ${{ steps.get_version.outputs.version-without-v }}
           URL: ${{ env.project_url }}
           MANIFEST: ${{ env.latest_manifest_url }}
           DOWNLOAD: ${{ env.release_module_url }}

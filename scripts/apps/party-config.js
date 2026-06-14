@@ -100,6 +100,14 @@ export class PartyConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
       zone.addEventListener("dragover", (e) => e.preventDefault());
       zone.addEventListener("drop",     (e) => this._onDrop(e));
     });
+
+    win.querySelectorAll("select[name='resolutionMode']").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const row = sel.closest(".party-editor");
+        const field = row?.querySelector(".designated-field");
+        if (field) field.classList.toggle("hidden", sel.value !== "designated");
+      });
+    });
   }
 
   // -----------------------------------------------------------------------

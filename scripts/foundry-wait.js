@@ -20,7 +20,10 @@ console.log(`[foundry-wait] Waiting up to ${TIMEOUT}s for Foundry at ${STATUS_UR
 
 async function checkStatus() {
   const res = await fetch(STATUS_URL, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) return { ready: false, detail: `HTTP ${res.status}` };
+  if (!res.ok) {
+    await res.text().catch(() => {});
+    return { ready: false, detail: `HTTP ${res.status}` };
+  }
   const body = await res.json().catch(() => ({}));
   return { ready: true, detail: JSON.stringify(body.status ?? "ok") };
 }
@@ -30,7 +33,7 @@ async function checkRoot() {
     signal: AbortSignal.timeout(8_000),
     redirect: "follow"
   });
-  // Any HTTP response means the server socket is accepting connections.
+  await res.text().catch(() => {});
   return res.status > 0;
 }
 
@@ -44,7 +47,7 @@ async function poll() {
 
       if (status.ready && rootOk) {
         console.log(`[foundry-wait] Foundry is ready (status: ${status.detail})`);
-        process.exit(0);
+        return true;
       }
 
       console.log(
@@ -58,7 +61,11 @@ async function poll() {
   }
 
   console.error(`[foundry-wait] Timed out after ${TIMEOUT}s — Foundry did not become ready.`);
-  process.exit(1);
+  return false;
 }
 
-poll();
+const ready = await poll();
+process.exitCode = ready ? 0 : 1;
+
+// Let libuv close fetch sockets before Node exits (avoids Windows Node 26 crash).
+await new Promise((r) => setTimeout(r, 100));

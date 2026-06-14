@@ -7,7 +7,7 @@
  *  - scene flag override is read by getSceneDistanceConfig
  */
 
-import { SceneFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture } from "./fixtures.js";
 import { computeTravelSeconds, formatTravelDuration, advanceClock } from "../../scripts/clock.js";
 import { getSceneDistanceConfig } from "../../scripts/settings.js";
 import { MODULE_ID } from "../../scripts/settings.js";
@@ -20,8 +20,8 @@ export function registerClockTests(quench) {
 
       let ctx;
 
-      before(async () => {
-        ctx = await SceneFixture.build();
+      before(async function() {
+        ctx = await buildSceneFixture(this);
       });
 
       after(async () => {
@@ -68,9 +68,9 @@ export function registerClockTests(quench) {
         it("advances worldTime by the correct number of seconds", async () => {
           await game.settings.set(MODULE_ID, "worldClockEnabled", true);
 
-          // 1000 px, 100 px/square, 1 unit/square, walk-normal 3 mph
-          // = 10 units / 3 mph * 3600 = 12000 s
-          const expected = computeTravelSeconds(1000, canvas.grid.size, 1, 3);
+          // 1000 px, scene grid size/distance, walk-normal 3 mph
+          const { distancePerSquare } = getSceneDistanceConfig(canvas.scene);
+          const expected = computeTravelSeconds(1000, canvas.grid.size, distancePerSquare, 3);
           const timeBefore = game.time.worldTime;
 
           await advanceClock(1000, "walk-normal");

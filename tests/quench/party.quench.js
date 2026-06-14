@@ -14,7 +14,6 @@ import {
   resolvePartyCheck,
   PartyCheckSession
 } from "../../scripts/party.js";
-import { CHANNEL, MSG } from "../../scripts/constants.js";
 
 export function registerPartyTests(quench) {
   quench.registerBatch("traveler.party", (context) => {
@@ -34,7 +33,8 @@ export function registerPartyTests(quench) {
       return a;
     }
 
-    before(async () => {
+    before(async function() {
+      this.timeout(180_000);
       // Snapshot existing parties so we can restore after tests
       originalParties = foundry.utils.deepClone(getParties());
       await saveParties([]);
@@ -230,7 +230,7 @@ export function registerPartyTests(quench) {
     // -----------------------------------------------------------------------
 
     describe("Socket round-trip", () => {
-      it("PARTY_CHECK_RESULT reaches a session via the socket", (done) => {
+      it("PARTY_CHECK_RESULT payload resolves the session (same path as socket handler)", async () => {
         const session = PartyCheckSession.create({
           partyId:     "socket-party",
           party:       createParty(),
@@ -241,25 +241,22 @@ export function registerPartyTests(quench) {
           continueKey: "sk"
         });
 
-        session.promise.then((results) => {
-          assert.equal(results[0].total, 17);
-          assert.isTrue(results[0].passed);
-          PartyCheckSession.remove(session.id);
-          done();
-        });
-
-        // Simulate what a player's level-check dialog does.
-        game.socket.emit(CHANNEL, {
-          type: MSG.PARTY_CHECK_RESULT,
-          payload: {
-            sessionId: session.id,
+        try {
+          // Foundry does not echo socket.emit to the same client — exercise the
+          // handler path directly (what the GM receives on PARTY_CHECK_RESULT).
+          session.addResult({
             actorId:   "s1",
-            userId:    game.user.id,
             total:     17,
             passed:    true,
             cancelled: false
-          }
-        });
+          });
+
+          const results = await session.promise;
+          assert.equal(results[0].total, 17);
+          assert.isTrue(results[0].passed);
+        } finally {
+          PartyCheckSession.remove(session.id);
+        }
       });
     });
   });

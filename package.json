@@ -12,9 +12,14 @@
     "test:inspect": "cross-env TRAVELER_KEEP_WORLD=true node scripts/run-quench.js",
     "foundry:wait": "node scripts/foundry-wait.js",
     "foundry:bootstrap": "node scripts/ci-bootstrap.js",
-    "foundry:up": "docker compose -f docker/compose.test.yml up -d",
-    "foundry:down": "docker compose -f docker/compose.test.yml down",
-    "foundry:down:clean": "docker compose -f docker/compose.test.yml down -v",
+    "playwright:install": "playwright install chromium",
+    "foundry:up": "docker compose --env-file .env -f docker/compose.test.yml up -d",
+    "foundry:stop": "docker compose --env-file .env -f docker/compose.test.yml stop",
+    "foundry:start": "docker compose --env-file .env -f docker/compose.test.yml start",
+    "foundry:logs": "docker compose --env-file .env -f docker/compose.test.yml logs -f foundry",
+    "foundry:down": "docker compose --env-file .env -f docker/compose.test.yml down",
+    "foundry:down:clean": "docker compose --env-file .env -f docker/compose.test.yml down -v",
+    "foundry:reset": "npm run foundry:down:clean && npm run foundry:up && npm run foundry:logs",
     "world:clean": "node scripts/world-clean.js"
   },
   "devDependencies": {

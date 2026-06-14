@@ -10,7 +10,7 @@
  * Registered by tests/quench/index.js.
  */
 
-import { SceneFixture } from "./fixtures.js";
+import { SceneFixture, buildSceneFixture } from "./fixtures.js";
 import {
   createEncounterZone,
   checkZones,
@@ -32,8 +32,8 @@ export function registerEncounterTests(quench) {
 
       let ctx;
 
-      before(async () => {
-        ctx = await SceneFixture.build();
+      before(async function() {
+        ctx = await buildSceneFixture(this);
       });
 
       after(async () => {

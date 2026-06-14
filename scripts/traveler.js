@@ -8,12 +8,14 @@ import { IndyRouteTravelModesApp } from "./apps/travel-modes.js";
 import { IndyRouteCurrenciesApp } from "./apps/currencies.js";
 import { buildRouteFromPoints, getSceneRoutes, createRouteRecord } from "./routes.js";
 import { TravelerChangeLevelBehavior } from "./behaviors/change-level.js";
+import { TravelerLevelCheckDialog } from "./behaviors/level-check-dialog.js";
 import { PlayerRouteTool, proposalToPayload } from "./tool-player.js";
 import { ProposalStore } from "./proposals.js";
 import { PLAYER_ROUTE_MODE, getPlayerRouteMode } from "./settings.js";
 import { MSG } from "./constants.js";
 import { PartyConfigApp } from "./apps/party-config.js";
 import { PartyCheckSession } from "./party.js";
+import { registerAllSuites } from "../tests/quench/index.js";
 
 /* -------------------------------------------- */
 /* Settings registration + menu                 */
@@ -359,7 +361,6 @@ Hooks.once("ready", () => {
       const tokenDoc = canvas.tokens?.placeables?.find?.(
         (t) => t.actor?.id === actorId
       )?.document ?? null;
-      const { TravelerLevelCheckDialog } = await import("./behaviors/level-check-dialog.js");
       const dialog = new TravelerLevelCheckDialog({
         behavior:       checkConfig,
         tokenDoc,
@@ -584,7 +585,5 @@ Hooks.once("ready", () => {
 // Quench integration tests — registered only when the quench module is active
 // ---------------------------------------------------------------------------
 Hooks.once("quenchReady", (quench) => {
-  import("../tests/quench/index.js")
-    .then(({ registerAllSuites }) => registerAllSuites(quench))
-    .catch((err) => console.error("Traveler | Failed to load Quench suites:", err));
+  registerAllSuites(quench);
 });
