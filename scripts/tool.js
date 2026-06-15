@@ -11,6 +11,28 @@ import { IndyRouteRenderer } from "./renderer.js";
 import { IndyRouteSettingsApp } from "./apps/settings-app.js";
 import { CHANNEL } from "./constants.js";
 
+/** Overlay layer for draw preview — avoid canvas.interface (Foundry HUD group). */
+function _getRouteOverlayLayer() {
+  return canvas?.foreground ?? canvas?.primary ?? null;
+}
+
+/** Map a pointer event to world canvas coordinates. */
+function _pointerToCanvasPos(event) {
+  const elevation = canvas?.level?.elevation?.bottom ?? 0;
+  const native = event?.data?.originalEvent ?? event;
+  const clientX = native?.clientX;
+  const clientY = native?.clientY;
+  if (Number.isFinite(clientX) && Number.isFinite(clientY) && canvas.canvasCoordinatesFromClient) {
+    const pt = canvas.canvasCoordinatesFromClient({ x: clientX, y: clientY });
+    return { x: pt.x, y: pt.y, elevation };
+  }
+  if (event?.data?.getLocalPosition && canvas.stage) {
+    const pt = event.data.getLocalPosition(canvas.stage);
+    return { x: pt.x, y: pt.y, elevation };
+  }
+  return { x: canvas.mousePosition.x, y: canvas.mousePosition.y, elevation };
+}
+
 export const IndyRouteTool = {
   state: null,
 
@@ -22,12 +44,15 @@ export const IndyRouteTool = {
       return;
     }
 
+    const overlay = _getRouteOverlayLayer();
+    if (!overlay) return ui.notifications.error("Canvas overlay not ready.");
+
     const container = new PIXI.Container();
     container.sortableChildren = true;
     container.zIndex = 999999;
 
-    canvas.primary.sortableChildren = true;
-    canvas.primary.addChild(container);
+    overlay.sortableChildren = true;
+    overlay.addChild(container);
 
     const preview = new PIXI.Graphics();
     preview.zIndex = 1;
@@ -61,13 +86,11 @@ export const IndyRouteTool = {
 
     ui.notifications.info("Route: Left-click points. Double-click or Enter to finish. Backspace removes last. Esc cancels.");
 
-    // Capture x/y plus the bottom elevation of the currently viewed Scene Level (v14).
-    // Falls back to 0 when no levels are defined, keeping single-level scenes unaffected.
-    const getCanvasPos = () => {
-      const level = canvas?.level;
-      const elevation = level?.elevation?.bottom ?? 0;
-      return { x: canvas.mousePosition.x, y: canvas.mousePosition.y, elevation };
-    };
+    const getCanvasPos = (event) => (event ? _pointerToCanvasPos(event) : {
+      x: canvas.mousePosition.x,
+      y: canvas.mousePosition.y,
+      elevation: canvas?.level?.elevation?.bottom ?? 0
+    });
 
     const drawPreview = (mousePos) => {
       let s = this.state.settings;
@@ -89,16 +112,37 @@ export const IndyRouteTool = {
 
       preview.clear();
       if (this.state.points.length === 0) return;
-      preview.lineStyle(s.lineWidth, s.lineColorNum, 0.35);
-      preview.moveTo(this.state.points[0].x, this.state.points[0].y);
-      for (let i = 1; i < this.state.points.length; i++) preview.lineTo(this.state.points[i].x, this.state.points[i].y);
-      if (mousePos) preview.lineTo(mousePos.x, mousePos.y);
+
+      const color = s.lineColorNum ?? 0xd61f1f;
+      const width = Math.max(2, s.lineWidth ?? 4);
+      const dotR = Math.max(6, Math.min(24, width * 0.75));
+
+      if (this.state.points.length >= 1) {
+        preview.lineStyle(width, color, 0.55);
+        preview.moveTo(this.state.points[0].x, this.state.points[0].y);
+        for (let i = 1; i < this.state.points.length; i++) {
+          preview.lineTo(this.state.points[i].x, this.state.points[i].y);
+        }
+        if (mousePos) preview.lineTo(mousePos.x, mousePos.y);
+      }
+
+      for (const p of this.state.points) {
+        preview.lineStyle(2, 0xffffff, 0.9);
+        preview.beginFill(color, 0.95);
+        preview.drawCircle(p.x, p.y, dotR);
+        preview.endFill();
+      }
     };
 
     const stopListeners = () => {
       const h = this.state.handlers;
-      canvas.stage.off("pointerdown", h.pointerdown);
-      canvas.stage.off("pointermove", h.pointermove);
+      const view = canvas.app?.view;
+      if (view && h.viewPointerDown) {
+        view.removeEventListener("pointerdown", h.viewPointerDown);
+        view.removeEventListener("pointermove", h.viewPointerMove);
+      }
+      if (h.pointerdown) canvas.stage.off("pointerdown", h.pointerdown);
+      if (h.pointermove) canvas.stage.off("pointermove", h.pointermove);
       window.removeEventListener("keydown", h.keydown, true);
     };
 
@@ -146,11 +190,11 @@ export const IndyRouteTool = {
       cleanup();
     };
 
-    // handlers
-    this.state.handlers.pointerdown = (event) => {
+    const handlePointerDown = (event) => {
+      if (!this.state?.active) return;
       const btn = event?.data?.button ?? event?.button ?? 0;
       if (btn !== 0) return;
-      const pos = getCanvasPos();
+      const pos = getCanvasPos(event);
       const nowMs = Date.now();
       const lastTime = this.state.lastClickTime ?? 0;
       const lastPos = this.state.lastClickPos;
@@ -170,15 +214,18 @@ export const IndyRouteTool = {
       this.state.points.push(pos);
       this.state.lastClickTime = nowMs;
       this.state.lastClickPos = pos;
-      drawPreview();
+      drawPreview(getCanvasPos(event));
     };
 
-    this.state.handlers.pointermove = () => {
+    const handlePointerMove = (event) => {
       if (!this.state?.active) return;
-      const pos = getCanvasPos();
+      const pos = getCanvasPos(event);
       this.state.lastMouse = pos;
       if (this.state.points.length) drawPreview(pos);
     };
+
+    this.state.handlers.pointerdown = handlePointerDown;
+    this.state.handlers.pointermove = handlePointerMove;
 
     this.state.handlers.keydown = (e) => {
       if (!this.state?.active) return;
@@ -189,9 +236,18 @@ export const IndyRouteTool = {
       if (e.key.toLowerCase() === "o" && e.altKey) { e.preventDefault(); new IndyRouteSettingsApp().render({ force: true }); }
     };
 
-    // attach
-    canvas.stage.on("pointerdown", this.state.handlers.pointerdown);
-    canvas.stage.on("pointermove", this.state.handlers.pointermove);
+    // v14: canvas.stage pointer events are often swallowed by layer hit-testing;
+    // bind the HTML canvas directly and fall back to stage listeners.
+    const view = canvas.app?.view;
+    if (view) {
+      this.state.handlers.viewPointerDown = handlePointerDown;
+      this.state.handlers.viewPointerMove = handlePointerMove;
+      view.addEventListener("pointerdown", this.state.handlers.viewPointerDown);
+      view.addEventListener("pointermove", this.state.handlers.viewPointerMove);
+    } else {
+      canvas.stage.on("pointerdown", this.state.handlers.pointerdown);
+      canvas.stage.on("pointermove", this.state.handlers.pointermove);
+    }
     window.addEventListener("keydown", this.state.handlers.keydown, true);
   },
 

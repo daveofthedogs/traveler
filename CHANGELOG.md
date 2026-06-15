@@ -13,6 +13,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased] — targeting v2.0.0
 
 ### Commits
+- *(pending)* — 2026-06-14 — Fix GM route draw tool: canvas clicks and preview on Foundry v14
 - `b4284fc` — 2026-06-13 — Add Party System (party tokens, multi-user checks, party config UI)
 - `e0662db` — 2026-06-13 — Add architecture.md documentation
 - `c3df688` — 2026-06-13 — Uplift to Foundry v14; fork renamed from `indy-route` to `traveler`
@@ -30,6 +31,22 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `91264e9` — 2026-06-13 — Fix encounter pause: broadcast ENCOUNTER_PAUSE/RESUME to all clients
 - `157af25` — 2026-06-13 — Move compose file to docker/, overhaul .gitignore, update CI and npm scripts
 - `b4284fc` — 2026-06-13 — Add Party System (party tokens, multi-user checks, party config UI)
+
+### Fixed — GM Route Draw Tool (Foundry v14)
+
+**Bug:** After clicking **Draw New Route** in the Route Manager, left-clicks on the canvas placed no
+visible waypoints and gave no rubber-band preview. GMs could not tell whether clicks were registering.
+
+**Root cause:** The draw tool listened for `pointerdown` on `canvas.stage`, which Foundry v14 often
+does not deliver when layer hit-testing consumes the event. Preview graphics were also placed on
+`canvas.primary`, where they could sit under tiles on hex maps. A follow-up attempt to force the
+Drawing scene-control layer could leave the toolbar layout in a broken state.
+
+**Fix:**
+- **`scripts/tool.js`**: Bind pointer handlers on `canvas.app.view` and map coordinates via
+  `canvas.canvasCoordinatesFromClient`. Render the in-progress preview on `canvas.foreground`
+  (above tiles). Draw red waypoint dots on each click plus a rubber-band line to the cursor.
+  Removed programmatic scene-control activation that could scramble the Foundry UI.
 
 ### Added — Party System
 
