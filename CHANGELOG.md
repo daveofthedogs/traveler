@@ -67,6 +67,21 @@ When a route has no travel mode, time uses the world default route settings, the
 - **`templates/route-manager.hbs`**: Added `fa-clock` badge beside the existing ruler; ruler tooltip
   now shows distance only; clock tooltip carries time, mode, and cost.
 
+### Fixed — Persist Route to Tile placement and selection
+
+**Bug:** **Persist to Tile** created a route image offset from the drawn path (often far northwest on
+hex maps). The tile could not be selected or moved with Foundry's tile tools.
+
+**Root cause:** Tile export used a two-step coordinate offset (`offsetPath` + `baseX`/`baseY`) and then
+adjusted position again from PIXI `getLocalBounds()`. Label bounds could skew that math. Tiles were also
+created with `locked: true`, which blocks selection in the Tiles layer.
+
+**Fix:**
+- **`scripts/renderer.js`**: Draw the export in scene coordinates; derive tile `x`/`y` directly from
+  measured bounds; render at `resolution: 1` so PNG pixels match tile width/height; create tiles
+  unlocked with a route name.
+- **`scripts/apps/manager.js`**: Success notification reminds GMs to use the Tiles layer to adjust.
+
 ### Added — Party System
 
 When an overland map uses a single **party token** (one token representing the whole group),
