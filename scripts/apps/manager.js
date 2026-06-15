@@ -557,7 +557,9 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     });
     if (!created) {
       ui.notifications.warn("Unable to persist route to a tile.");
+      return;
     }
+    ui.notifications.info(`Route saved as tile "${created.name}". Use the Tiles layer to move or adjust it.`);
   }
 
   _clearRoute(routeId) {
