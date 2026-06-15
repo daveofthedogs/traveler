@@ -40,6 +40,21 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     return modes.find((entry) => entry.id === mode) ?? null;
   }
 
+  /** Route travel mode, then world default, then walk-normal for time estimates. */
+  _resolveEffectiveTravelMode(route) {
+    const routeMode = route?.settings?.travelMode;
+    if (routeMode && routeMode !== "none") {
+      return { modeId: routeMode, source: "route" };
+    }
+    try {
+      const globalMode = normalizeSettings(game.settings.get(MODULE_ID, "routeSettings"))?.travelMode;
+      if (globalMode && globalMode !== "none") {
+        return { modeId: globalMode, source: "global" };
+      }
+    } catch {}
+    return { modeId: "walk-normal", source: "default" };
+  }
+
   _formatTravelTime(hours) {
     if (!Number.isFinite(hours)) return "";
     if (hours >= 24) {
@@ -157,18 +172,19 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       totalPx += Math.hypot(b.x - a.x, b.y - a.y);
     }
     const totalUnits = (totalPx / gridSize) * distancePerSquare;
-    const useMiles = route?.settings?.travelMode && route.settings.travelMode !== "none";
-    const units = useMiles ? "mi" : (distUnits || (canvas?.scene?.grid?.units ?? "units"));
+    const routeModeSet = route?.settings?.travelMode && route.settings.travelMode !== "none";
+    const units = routeModeSet ? "mi" : (distUnits || (canvas?.scene?.grid?.units ?? "units"));
     const rounded = Math.round(totalUnits * 100) / 100;
     const distanceLabel = `Length: ${rounded} ${units}`;
 
-    if (!useMiles) {
+    const { modeId, source } = this._resolveEffectiveTravelMode(route);
+    const travel = this._getTravelModeData(modeId);
+    if (!travel?.speedMph) {
       return { distanceLabel, timeLabel: null, timeTooltip: null, fullTooltip: distanceLabel };
     }
 
-    const travel = this._getTravelModeData(route.settings.travelMode);
     const perDay = travel?.perDayMiles;
-    const hours = travel?.speedMph ? (totalUnits / travel.speedMph) : null;
+    const hours = totalUnits / travel.speedMph;
     const days = perDay ? (totalUnits / perDay) : null;
     let dayCount = Number.isFinite(days) ? Math.floor(days) : null;
     let partialHours = null;
@@ -190,7 +206,10 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       : ((Number.isFinite(dayRate) && Number.isFinite(dayCount) ? dayRate * dayCount : 0) +
         (Number.isFinite(hourRate) && Number.isFinite(partialHours) ? hourRate * partialHours : 0));
     const costLabel = this._formatCostCurrency(cost);
-    const modeLabel = travel?.label ? `Mode: ${travel.label}` : null;
+    const modeSuffix = source === "global"
+      ? " (world default)"
+      : (source === "default" ? " (estimate)" : "");
+    const modeLabel = travel?.label ? `Mode: ${travel.label}${modeSuffix}` : null;
     const firstLine = [distanceLabel, timeLabel ? `Time: ${timeLabel}` : null]
       .filter(Boolean)
       .join(" | ");

@@ -51,18 +51,19 @@ Drawing scene-control layer could leave the toolbar layout in a broken state.
 
 ### Added — Route Manager travel time icon (`feature/001-add_time`)
 
-Route rows in the Route Manager now show **two** info badges when a route has a travel mode set:
+Route rows in the Route Manager now show **two** info badges when travel time can be estimated:
 
 | Icon | Tooltip |
 |------|---------|
 | **Ruler** | Distance only — e.g. `Length: 42.5 mi` |
 | **Clock** | Travel time, mode, and fare — e.g. `Time: 2 days 4 h`, `Mode: Walking (Normal)`, `Cost: …` |
 
-The clock badge is hidden when the route travel mode is `none` (distance-only routes still show the ruler).
+When a route has no travel mode, time uses the world default route settings, then **Walking (Normal)** as a fallback (tooltip notes `(estimate)`). Set **Travel Mode** in Style (sliders) for an explicit mode and cost tier.
 
 **Changes:**
 - **`scripts/apps/manager.js`**: Refactored `_getRouteTravelStats()` from `_getRouteLengthLabel()` to
   expose `distanceLabel`, `timeLabel`, and `timeTooltip` separately for the template.
+  Added `_resolveEffectiveTravelMode()` for route → world → default fallback.
 - **`templates/route-manager.hbs`**: Added `fa-clock` badge beside the existing ruler; ruler tooltip
   now shows distance only; clock tooltip carries time, mode, and cost.
 
