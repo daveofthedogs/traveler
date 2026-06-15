@@ -40,6 +40,21 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     return modes.find((entry) => entry.id === mode) ?? null;
   }
 
+  /** Route travel mode, then world default, then walk-normal for time estimates. */
+  _resolveEffectiveTravelMode(route) {
+    const routeMode = route?.settings?.travelMode;
+    if (routeMode && routeMode !== "none") {
+      return { modeId: routeMode, source: "route" };
+    }
+    try {
+      const globalMode = normalizeSettings(game.settings.get(MODULE_ID, "routeSettings"))?.travelMode;
+      if (globalMode && globalMode !== "none") {
+        return { modeId: globalMode, source: "global" };
+      }
+    } catch {}
+    return { modeId: "walk-normal", source: "default" };
+  }
+
   _formatTravelTime(hours) {
     if (!Number.isFinite(hours)) return "";
     if (hours >= 24) {
@@ -141,13 +156,13 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
     );
   }
 
-  _getRouteLengthLabel(route) {
-    if (!route?.points || route.points.length < 2) return "";
+  _getRouteTravelStats(route) {
+    if (!route?.points || route.points.length < 2) return null;
     const gridSize = canvas?.grid?.size ?? canvas?.scene?.grid?.size ?? null;
-    if (!gridSize) return "";
+    if (!gridSize) return null;
     const distCfg = getSceneDistanceConfig();
     const { distancePerSquare, units: distUnits } = distCfg;
-    if (!distancePerSquare) return "";
+    if (!distancePerSquare) return null;
     const built = buildRouteFromPoints(route.points, route.settings);
     const path = built?.path ?? route.points;
     let totalPx = 0;
@@ -157,47 +172,70 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
       totalPx += Math.hypot(b.x - a.x, b.y - a.y);
     }
     const totalUnits = (totalPx / gridSize) * distancePerSquare;
-    const useMiles = route?.settings?.travelMode && route.settings.travelMode !== "none";
-    const units = useMiles ? "mi" : (distUnits || (canvas?.scene?.grid?.units ?? "units"));
+    const routeModeSet = route?.settings?.travelMode && route.settings.travelMode !== "none";
+    const units = routeModeSet ? "mi" : (distUnits || (canvas?.scene?.grid?.units ?? "units"));
     const rounded = Math.round(totalUnits * 100) / 100;
     const distanceLabel = `Length: ${rounded} ${units}`;
-    if (useMiles) {
-      const travel = this._getTravelModeData(route.settings.travelMode);
-      const perDay = travel?.perDayMiles;
-      const hours = travel?.speedMph ? (totalUnits / travel.speedMph) : null;
-      const days = perDay ? (totalUnits / perDay) : null;
-      let dayCount = Number.isFinite(days) ? Math.floor(days) : null;
-      let partialHours = null;
-      if (Number.isFinite(days) && perDay && travel?.speedMph) {
-        const remainingMiles = totalUnits - dayCount * perDay;
-        partialHours = Math.max(0, remainingMiles) / travel.speedMph;
-      }
-      const useHourlyOnly = !Number.isFinite(days);
-      const timeLabel = useHourlyOnly
-        ? this._formatTravelTime(hours)
-        : (dayCount > 0
-          ? `${dayCount} days${partialHours ? ` ${this._formatTravelTime(partialHours)}` : ""}`
-          : this._formatTravelTime(partialHours ?? hours));
-      const tier = route.settings.travelFareTier ?? "standard";
-      const dayRate = travel?.costPerDay?.[tier] ?? travel?.costPerDay?.standard ?? null;
-      const hourRate = travel?.costPerHour?.[tier] ?? travel?.costPerHour?.standard ?? null;
-      const cost = useHourlyOnly
-        ? (Number.isFinite(hourRate) && Number.isFinite(hours) ? hourRate * hours : null)
-        : ((Number.isFinite(dayRate) && Number.isFinite(dayCount) ? dayRate * dayCount : 0) +
-          (Number.isFinite(hourRate) && Number.isFinite(partialHours) ? hourRate * partialHours : 0));
-      const costLabel = this._formatCostCurrency(cost);
-      const modeLabel = travel?.label ? `Mode: ${travel.label}` : null;
-      const firstLine = [distanceLabel, timeLabel ? `Time: ${timeLabel}` : null]
-        .filter(Boolean)
-        .join(" | ");
-      const lines = [
-        firstLine || null,
-        modeLabel,
-        costLabel ? `Cost: ${costLabel}` : null
-      ].filter(Boolean);
-      return lines.join("<br>");
+
+    const { modeId, source } = this._resolveEffectiveTravelMode(route);
+    const travel = this._getTravelModeData(modeId);
+    if (!travel?.speedMph) {
+      return { distanceLabel, timeLabel: null, timeTooltip: null, fullTooltip: distanceLabel };
     }
-    return distanceLabel;
+
+    const perDay = travel?.perDayMiles;
+    const hours = totalUnits / travel.speedMph;
+    const days = perDay ? (totalUnits / perDay) : null;
+    let dayCount = Number.isFinite(days) ? Math.floor(days) : null;
+    let partialHours = null;
+    if (Number.isFinite(days) && perDay && travel?.speedMph) {
+      const remainingMiles = totalUnits - dayCount * perDay;
+      partialHours = Math.max(0, remainingMiles) / travel.speedMph;
+    }
+    const useHourlyOnly = !Number.isFinite(days);
+    const timeLabel = useHourlyOnly
+      ? this._formatTravelTime(hours)
+      : (dayCount > 0
+        ? `${dayCount} days${partialHours ? ` ${this._formatTravelTime(partialHours)}` : ""}`
+        : this._formatTravelTime(partialHours ?? hours));
+    const tier = route.settings.travelFareTier ?? "standard";
+    const dayRate = travel?.costPerDay?.[tier] ?? travel?.costPerDay?.standard ?? null;
+    const hourRate = travel?.costPerHour?.[tier] ?? travel?.costPerHour?.standard ?? null;
+    const cost = useHourlyOnly
+      ? (Number.isFinite(hourRate) && Number.isFinite(hours) ? hourRate * hours : null)
+      : ((Number.isFinite(dayRate) && Number.isFinite(dayCount) ? dayRate * dayCount : 0) +
+        (Number.isFinite(hourRate) && Number.isFinite(partialHours) ? hourRate * partialHours : 0));
+    const costLabel = this._formatCostCurrency(cost);
+    const modeSuffix = source === "global"
+      ? " (world default)"
+      : (source === "default" ? " (estimate)" : "");
+    const modeLabel = travel?.label ? `Mode: ${travel.label}${modeSuffix}` : null;
+    const firstLine = [distanceLabel, timeLabel ? `Time: ${timeLabel}` : null]
+      .filter(Boolean)
+      .join(" | ");
+    const fullTooltip = [
+      firstLine || null,
+      modeLabel,
+      costLabel ? `Cost: ${costLabel}` : null
+    ].filter(Boolean).join("<br>");
+    const timeTooltip = [
+      timeLabel ? `Time: ${timeLabel}` : null,
+      modeLabel,
+      costLabel ? `Cost: ${costLabel}` : null
+    ].filter(Boolean).join("<br>");
+
+    return {
+      distanceLabel,
+      timeLabel: timeLabel || null,
+      timeTooltip: timeTooltip || null,
+      fullTooltip
+    };
+  }
+
+  _getRouteLengthLabel(route) {
+    const stats = this._getRouteTravelStats(route);
+    if (!stats) return "";
+    return stats.fullTooltip ?? stats.distanceLabel;
   }
 
   _getRouteLevelName(route) {
@@ -216,12 +254,18 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
   }
 
   async _prepareContext() {
-    const routes = getSceneRoutes().map((route) => ({
-      ...route,
-      lengthLabel:    this._getRouteLengthLabel(route),
-      levelName:      this._getRouteLevelName(route),
-      encounterCount: (route.encounters ?? []).length
-    }));
+    const routes = getSceneRoutes().map((route) => {
+      const stats = this._getRouteTravelStats(route);
+      return {
+        ...route,
+        distanceLabel:  stats?.distanceLabel ?? "",
+        timeLabel:      stats?.timeLabel ?? "",
+        timeTooltip:    stats?.timeTooltip ?? "",
+        lengthLabel:    stats?.fullTooltip ?? stats?.distanceLabel ?? "",
+        levelName:      this._getRouteLevelName(route),
+        encounterCount: (route.encounters ?? []).length
+      };
+    });
 
     const showProposals = game.user.isGM && getPlayerRouteMode() === PLAYER_ROUTE_MODE.APPROVAL;
     const proposals = showProposals
