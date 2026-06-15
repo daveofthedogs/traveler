@@ -23,6 +23,7 @@ import {
 
 const KEEP_WORLD = process.env.TRAVELER_KEEP_WORLD === "true";
 const BATCH_GLOB = "traveler.**";
+const VERBOSE = ["1", "true", "yes"].includes((process.env.QUENCH_VERBOSE ?? "").toLowerCase());
 
 /** @param {Array<{ fullTitle?: string, title?: string, err?: { message?: string, stack?: string } }>} failures */
 function printFailures(failures) {
@@ -95,8 +96,13 @@ async function main() {
     );
     console.log(`[run-quench] Registered batches: ${batchNames.join(", ")}`);
 
+    if (VERBOSE) {
+      await page.exposeFunction("quenchLog", (line) => console.log(`[quench] ${line}`));
+      console.log("[run-quench] QUENCH_VERBOSE enabled — streaming per-test results");
+    }
+
     console.log("[run-quench] Running Quench test suites…");
-    const results = await page.evaluate(async (glob) => {
+    const results = await page.evaluate(async ({ glob, verbose }) => {
       if (quench._currentRunner) quench.abort();
 
       // Quench v0.10 on Foundry v14 requires the runner app to be rendered
@@ -106,6 +112,29 @@ async function main() {
 
       const runner = await quench.runBatches(glob);
       const runEnd = Mocha.Runner.constants.EVENT_RUN_END;
+      const {
+        EVENT_SUITE_BEGIN,
+        EVENT_TEST_PASS,
+        EVENT_TEST_FAIL,
+        EVENT_TEST_PENDING
+      } = Mocha.Runner.constants;
+
+      if (verbose && typeof window.quenchLog === "function") {
+        runner.on(EVENT_SUITE_BEGIN, (suite) => {
+          if (suite.root) return;
+          const title = suite.fullTitle?.() ?? suite.title;
+          if (title) window.quenchLog(`▶ ${title}`);
+        });
+        runner.on(EVENT_TEST_PASS, (test) => {
+          window.quenchLog(`  ✓ ${test.fullTitle?.() ?? test.title}`);
+        });
+        runner.on(EVENT_TEST_FAIL, (test) => {
+          window.quenchLog(`  ✗ ${test.fullTitle?.() ?? test.title}`);
+        });
+        runner.on(EVENT_TEST_PENDING, (test) => {
+          window.quenchLog(`  - ${test.fullTitle?.() ?? test.title} (pending)`);
+        });
+      }
 
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -143,7 +172,7 @@ async function main() {
           err:       t.err ? { message: t.err.message, stack: t.err.stack } : undefined
         }))
       };
-    }, BATCH_GLOB);
+    }, { glob: BATCH_GLOB, verbose: VERBOSE });
 
     console.log("\n──────────────────────────────────────────");
     console.log("Quench Results");
