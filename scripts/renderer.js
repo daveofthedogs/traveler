@@ -812,6 +812,41 @@ export const IndyRouteRenderer = {
     });
   },
 
+  _estimateRouteTilePadding(settings, { includeEndX = true, labelText = "" } = {}) {
+    const lineWidth = settings?.lineWidth ?? 1;
+    const pad = Math.max(10, lineWidth * 2 + 4);
+    const endPad = includeEndX && settings?.showEndX !== false ? lineWidth * 2 : 0;
+    let labelPad = 0;
+    if (settings?.showLabel && (labelText ?? "").toString().trim()) {
+      const fontSize = Math.min(
+        200,
+        Number.isFinite(settings.labelFontSize) ? settings.labelFontSize : Math.max(10, lineWidth * 2)
+      );
+      const offset = Number.isFinite(settings.labelOffset) ? settings.labelOffset : 16;
+      labelPad = fontSize + Math.abs(offset) + pad;
+    }
+    return pad + endPad + labelPad;
+  },
+
+  _measureRouteTileBounds(container, fallbackWidth, fallbackHeight) {
+    const rect = new PIXI.Rectangle();
+    try {
+      container.getBounds(false, rect);
+    } catch {
+      rect.x = 0;
+      rect.y = 0;
+      rect.width = fallbackWidth;
+      rect.height = fallbackHeight;
+    }
+    if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) {
+      rect.x = 0;
+      rect.y = 0;
+      rect.width = fallbackWidth;
+      rect.height = fallbackHeight;
+    }
+    return rect;
+  },
+
   async persistRouteToTile(path, settings, { includeEndX = true, labelText = "" } = {}) {
     if (!canvas?.ready || !canvas?.scene) return null;
     if (!Array.isArray(path) || path.length < 2) return null;
@@ -831,14 +866,9 @@ export const IndyRouteRenderer = {
     }
     if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) return null;
 
-    const pad = Math.max(10, (settings?.lineWidth ?? 1) * 2 + 4);
-    const baseWidth = Math.max(1, Math.ceil(maxX - minX + pad * 2));
-    const baseHeight = Math.max(1, Math.ceil(maxY - minY + pad * 2));
-    const baseX = minX - pad;
-    const baseY = minY - pad;
-    const offsetX = -minX + pad;
-    const offsetY = -minY + pad;
-    const offsetPath = path.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY }));
+    const margin = this._estimateRouteTilePadding(settings, { includeEndX, labelText });
+    const fallbackWidth = Math.max(1, Math.ceil(maxX - minX + margin * 2));
+    const fallbackHeight = Math.max(1, Math.ceil(maxY - minY + margin * 2));
 
     const container = new PIXI.Container();
     const line = new PIXI.Graphics();
@@ -853,32 +883,25 @@ export const IndyRouteRenderer = {
 
     const dashState = { offset: 0 };
     const dash = this.getDashPattern(settings);
-    for (let i = 1; i < offsetPath.length; i++) {
-      this.drawDashedSegment(line, offsetPath[i - 1], offsetPath[i], dashState, dash.dashLen, dash.gapLen);
+    for (let i = 1; i < path.length; i++) {
+      this.drawDashedSegment(line, path[i - 1], path[i], dashState, dash.dashLen, dash.gapLen);
     }
 
     if (includeEndX) {
-      const end = offsetPath[offsetPath.length - 1];
+      const end = path[path.length - 1];
       this.drawEndX(container, end.x, end.y, settings, settings.lineWidth * 2);
     }
-    await labelRenderer.drawLabel(container, offsetPath, settings, labelText);
+    await labelRenderer.drawLabel(container, path, settings, labelText, { forceHighQuality: true });
 
-    let tileX = baseX;
-    let tileY = baseY;
-    let renderWidth = baseWidth;
-    let renderHeight = baseHeight;
-    const bounds = container.getLocalBounds?.();
-    if (bounds && Number.isFinite(bounds.width) && Number.isFinite(bounds.height)) {
-      const extraPad = Math.max(2, Math.ceil((settings?.lineWidth ?? 1) / 2));
-      renderWidth = Math.max(1, Math.ceil(bounds.width + extraPad * 2));
-      renderHeight = Math.max(1, Math.ceil(bounds.height + extraPad * 2));
-      container.position.set(-bounds.x + extraPad, -bounds.y + extraPad);
-      tileX = baseX + bounds.x - extraPad;
-      tileY = baseY + bounds.y - extraPad;
-    }
+    const bounds = this._measureRouteTileBounds(container, fallbackWidth, fallbackHeight);
+    const extraPad = Math.max(2, Math.ceil((settings?.lineWidth ?? 1) / 2));
+    const tileX = Math.floor(bounds.x - extraPad);
+    const tileY = Math.floor(bounds.y - extraPad);
+    const renderWidth = Math.max(1, Math.ceil(bounds.width + extraPad * 2));
+    const renderHeight = Math.max(1, Math.ceil(bounds.height + extraPad * 2));
+    container.position.set(-tileX, -tileY);
 
-    const resolution = Number.isFinite(renderer.resolution) ? renderer.resolution : (PIXI.settings?.RESOLUTION ?? 1);
-    const renderTexture = PIXI.RenderTexture.create({ width: renderWidth, height: renderHeight, resolution });
+    const renderTexture = PIXI.RenderTexture.create({ width: renderWidth, height: renderHeight, resolution: 1 });
     renderer.render(container, { renderTexture, clear: true });
     const extractCanvas = renderer.extract.canvas(renderTexture);
     renderTexture.destroy(true);
@@ -921,13 +944,16 @@ export const IndyRouteRenderer = {
       textureSrc = null;
     }
     if (!textureSrc) return null;
+    const tileName = (labelText ?? "").toString().trim() || "Traveler Route";
     const tileData = {
+      name: tileName,
       x: tileX,
       y: tileY,
-      width: renderWidth,
-      height: renderHeight,
+      width: extractCanvas.width || renderWidth,
+      height: extractCanvas.height || renderHeight,
+      alpha: Number.isFinite(settings?.lineAlpha) ? settings.lineAlpha : 1,
       texture: { src: textureSrc },
-      locked: true
+      locked: false
     };
     const created = await canvas.scene.createEmbeddedDocuments("Tile", [tileData]);
     return created?.[0] ?? null;

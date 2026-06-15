@@ -48,6 +48,21 @@ Drawing scene-control layer could leave the toolbar layout in a broken state.
   (above tiles). Draw red waypoint dots on each click plus a rubber-band line to the cursor.
   Removed programmatic scene-control activation that could scramble the Foundry UI.
 
+### Fixed — Persist Route to Tile placement and selection
+
+**Bug:** **Persist to Tile** created a route image offset from the drawn path (often far northwest on
+hex maps). The tile could not be selected or moved with Foundry's tile tools.
+
+**Root cause:** Tile export used a two-step coordinate offset (`offsetPath` + `baseX`/`baseY`) and then
+adjusted position again from PIXI `getLocalBounds()`. Label bounds could skew that math. Tiles were also
+created with `locked: true`, which blocks selection in the Tiles layer.
+
+**Fix:**
+- **`scripts/renderer.js`**: Draw the export in scene coordinates; derive tile `x`/`y` directly from
+  measured bounds; render at `resolution: 1` so PNG pixels match tile width/height; create tiles
+  unlocked with a route name.
+- **`scripts/apps/manager.js`**: Success notification reminds GMs to use the Tiles layer to adjust.
+
 ### Added — Party System
 
 When an overland map uses a single **party token** (one token representing the whole group),
