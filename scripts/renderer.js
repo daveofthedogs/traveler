@@ -1,5 +1,6 @@
 import { DEFAULTS, getCameraScaleForPath } from "./settings.js";
 import { IndyRouteLabelRenderer } from "./label-renderer.js";
+import { computeLegMarkerPoints } from "./leg-markers.js";
 
 function panToPosition(x, y, scale) {
   if (canvas?.pan) return canvas.pan({ x, y, scale });
@@ -139,6 +140,24 @@ export const IndyRouteRenderer = {
     g.moveTo(x - size, y - size); g.lineTo(x + size, y + size);
     g.moveTo(x + size, y - size); g.lineTo(x - size, y + size);
     container.addChild(g);
+  },
+
+  drawLegMarkers(container, path, settings) {
+    const points = computeLegMarkerPoints(path, settings);
+    if (!points.length) return null;
+    const g = new PIXI.Graphics();
+    g.zIndex = 2.5;
+    const radius = Number.isFinite(settings.legMarkerRadius) ? settings.legMarkerRadius : 6;
+    const fill = settings.legMarkerColorNum ?? 0xd61f1f;
+    const alpha = Number.isFinite(settings.lineAlpha) ? settings.lineAlpha : 1;
+    for (const point of points) {
+      g.lineStyle({ width: 1, color: 0x000000, alpha: Math.min(1, alpha * 0.65) });
+      g.beginFill(fill, alpha);
+      g.drawCircle(point.x, point.y, radius);
+      g.endFill();
+    }
+    container.addChild(g);
+    return g;
   },
 
   drawDashedSegment(graphics, a, b, dashState, dashLen = 20, gapLen = 14) {
@@ -489,6 +508,8 @@ export const IndyRouteRenderer = {
       join: PIXI.LINE_JOIN.ROUND
     });
 
+    this.drawLegMarkers(container, path, settings);
+
     const isPreview = preview === true;
     const restoreState = isPreview
       ? {
@@ -804,6 +825,8 @@ export const IndyRouteRenderer = {
       this.drawDashedSegment(finalLine, path[i - 1], path[i], dashState, dash.dashLen, dash.gapLen);
     }
 
+    this.drawLegMarkers(container, path, settings);
+
     dot.clear();
     const end = path[path.length - 1];
     this.drawEndX(container, end.x, end.y, settings, settings.lineWidth * 2);
@@ -825,7 +848,10 @@ export const IndyRouteRenderer = {
       const offset = Number.isFinite(settings.labelOffset) ? settings.labelOffset : 16;
       labelPad = fontSize + Math.abs(offset) + pad;
     }
-    return pad + endPad + labelPad;
+    const markerPad = settings?.showLegMarkers
+      ? (Number.isFinite(settings.legMarkerRadius) ? settings.legMarkerRadius : 6) + 2
+      : 0;
+    return pad + endPad + labelPad + markerPad;
   },
 
   _measureRouteTileBounds(container, fallbackWidth, fallbackHeight) {
@@ -886,6 +912,8 @@ export const IndyRouteRenderer = {
     for (let i = 1; i < path.length; i++) {
       this.drawDashedSegment(line, path[i - 1], path[i], dashState, dash.dashLen, dash.gapLen);
     }
+
+    this.drawLegMarkers(container, path, settings);
 
     if (includeEndX) {
       const end = path[path.length - 1];

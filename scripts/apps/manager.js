@@ -1,4 +1,5 @@
 import { MODULE_ID, DEFAULTS, normalizeSettings, getTravelModes, getPlayerRouteMode, PLAYER_ROUTE_MODE, getSceneDistanceConfig } from "../settings.js";
+import { resolveEffectiveTravelMode } from "../leg-markers.js";
 import { SceneSettingsDialog } from "./scene-settings.js";
 import { CHANNEL, MSG } from "../constants.js";
 import { IndyRouteRenderer } from "../renderer.js";
@@ -42,17 +43,7 @@ export class IndyRouteManager extends foundry.applications.api.HandlebarsApplica
 
   /** Route travel mode, then world default, then walk-normal for time estimates. */
   _resolveEffectiveTravelMode(route) {
-    const routeMode = route?.settings?.travelMode;
-    if (routeMode && routeMode !== "none") {
-      return { modeId: routeMode, source: "route" };
-    }
-    try {
-      const globalMode = normalizeSettings(game.settings.get(MODULE_ID, "routeSettings"))?.travelMode;
-      if (globalMode && globalMode !== "none") {
-        return { modeId: globalMode, source: "global" };
-      }
-    } catch {}
-    return { modeId: "walk-normal", source: "default" };
+    return resolveEffectiveTravelMode(route?.settings);
   }
 
   _formatTravelTime(hours) {

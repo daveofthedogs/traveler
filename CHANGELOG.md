@@ -82,6 +82,23 @@ created with `locked: true`, which blocks selection in the Tiles layer.
   unlocked with a route name.
 - **`scripts/apps/manager.js`**: Success notification reminds GMs to use the Tiles layer to adjust.
 
+### Added — Travel-time leg markers on rendered routes
+
+Routes can show **leg markers** — small circles placed along the path at configurable travel-time
+intervals (e.g. every 12 hours or 1 day). Uses the same travel-mode and scene-distance math as the
+Route Manager clock estimate.
+
+Configure on the route editor **Label** tab: enable markers, set interval value/unit, color, and size.
+Markers appear during playback, preview, and persist-to-tile export.
+
+**Changes:**
+- **`scripts/leg-markers.js`**: `computeLegMarkerPoints()`, shared `resolveEffectiveTravelMode()`.
+- **`scripts/settings.js`**: `showLegMarkers`, `legMarkerInterval`, `legMarkerIntervalUnit`,
+  `legMarkerColor`, `legMarkerRadius` defaults and normalization.
+- **`scripts/renderer.js`**: `drawLegMarkers()` on animated routes, preview, and tile export.
+- **`templates/settings.hbs`**: Label tab controls for leg markers.
+- **`tests/unit/leg-markers.test.js`**: Unit tests for interval conversion and marker placement.
+
 ### Added — Party System
 
 When an overland map uses a single **party token** (one token representing the whole group),

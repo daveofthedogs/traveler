@@ -262,6 +262,7 @@ export class IndyRouteSettingsBase extends foundry.applications.api.HandlebarsAp
       "settings.showLabel",
       "settings.labelFollowPath",
       "settings.labelShowArrow",
+      "settings.showLegMarkers",
       "settings.scaleWithMap",
       "settings.cinematicMovement"
     ];
@@ -428,6 +429,7 @@ export class IndyRouteEditor extends IndyRouteSettingsBase {
       "settings.showLabel",
       "settings.labelFollowPath",
       "settings.labelShowArrow",
+      "settings.showLegMarkers",
       "settings.scaleWithMap",
       "settings.cinematicMovement"
     ];

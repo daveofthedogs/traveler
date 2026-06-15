@@ -34,6 +34,11 @@ export const DEFAULTS = {
   labelFollowPath: true,
   labelShowArrow: false,
   labelPosition: 50,
+  showLegMarkers: false,
+  legMarkerInterval: 12,
+  legMarkerIntervalUnit: "h",
+  legMarkerColor: "#d61f1f",
+  legMarkerRadius: 6,
   scaleWithMap: true,
   scaleMultiplier: 1,
   cinematicMovement: true,
@@ -217,7 +222,8 @@ export function getSettings() {
     ...s,
     lineColorNum:  _hexToNum(s.lineColor,  DEFAULTS.lineColor),
     dotColorNum:   _hexToNum(s.dotColor,   DEFAULTS.dotColor),
-    labelColorNum: _hexToNum(s.labelColor, DEFAULTS.labelColor)
+    labelColorNum: _hexToNum(s.labelColor, DEFAULTS.labelColor),
+    legMarkerColorNum: _hexToNum(s.legMarkerColor, DEFAULTS.legMarkerColor)
   };
 }
 
@@ -226,7 +232,8 @@ export function applyColorNumbers(settings) {
     ...settings,
     lineColorNum:  _hexToNum(settings.lineColor,  DEFAULTS.lineColor),
     dotColorNum:   _hexToNum(settings.dotColor,   DEFAULTS.dotColor),
-    labelColorNum: _hexToNum(settings.labelColor, DEFAULTS.labelColor)
+    labelColorNum: _hexToNum(settings.labelColor, DEFAULTS.labelColor),
+    legMarkerColorNum: _hexToNum(settings.legMarkerColor, DEFAULTS.legMarkerColor)
   };
 }
 
@@ -269,6 +276,11 @@ export function normalizeSettings(s) {
     labelFontFamily: (s.labelFontFamily ?? "Modesto Condensed, serif").toString(),
     labelFollowPath: s.labelFollowPath !== false,
     labelShowArrow: !!s.labelShowArrow,
+    showLegMarkers: !!s.showLegMarkers,
+    legMarkerInterval: Number.isFinite(num(s.legMarkerInterval)) ? Math.max(0.25, num(s.legMarkerInterval)) : DEFAULTS.legMarkerInterval,
+    legMarkerIntervalUnit: ["min", "h", "d"].includes(s.legMarkerIntervalUnit) ? s.legMarkerIntervalUnit : DEFAULTS.legMarkerIntervalUnit,
+    legMarkerColor: s.legMarkerColor ?? DEFAULTS.legMarkerColor,
+    legMarkerRadius: Number.isFinite(num(s.legMarkerRadius)) ? Math.max(2, Math.min(30, num(s.legMarkerRadius))) : DEFAULTS.legMarkerRadius,
     showEndX: !!s.showEndX,
     renderAboveTokens: !!s.renderAboveTokens,
     scaleWithMap: !!s.scaleWithMap,
