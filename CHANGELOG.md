@@ -13,6 +13,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased] — targeting v2.0.0
 
 ### Commits
+- *(pending)* — 2026-06-14 — `feature/001-add_time` — Route Manager: clock icon for travel time estimate
 - *(pending)* — 2026-06-14 — Fix GM route draw tool: canvas clicks and preview on Foundry v14
 - `b4284fc` — 2026-06-13 — Add Party System (party tokens, multi-user checks, party config UI)
 - `e0662db` — 2026-06-13 — Add architecture.md documentation
@@ -47,6 +48,23 @@ Drawing scene-control layer could leave the toolbar layout in a broken state.
   `canvas.canvasCoordinatesFromClient`. Render the in-progress preview on `canvas.foreground`
   (above tiles). Draw red waypoint dots on each click plus a rubber-band line to the cursor.
   Removed programmatic scene-control activation that could scramble the Foundry UI.
+
+### Added — Route Manager travel time icon (`feature/001-add_time`)
+
+Route rows in the Route Manager now show **two** info badges when a route has a travel mode set:
+
+| Icon | Tooltip |
+|------|---------|
+| **Ruler** | Distance only — e.g. `Length: 42.5 mi` |
+| **Clock** | Travel time, mode, and fare — e.g. `Time: 2 days 4 h`, `Mode: Walking (Normal)`, `Cost: …` |
+
+The clock badge is hidden when the route travel mode is `none` (distance-only routes still show the ruler).
+
+**Changes:**
+- **`scripts/apps/manager.js`**: Refactored `_getRouteTravelStats()` from `_getRouteLengthLabel()` to
+  expose `distanceLabel`, `timeLabel`, and `timeTooltip` separately for the template.
+- **`templates/route-manager.hbs`**: Added `fa-clock` badge beside the existing ruler; ruler tooltip
+  now shows distance only; clock tooltip carries time, mode, and cost.
 
 ### Added — Party System
 

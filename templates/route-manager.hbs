@@ -78,6 +78,9 @@
         color: var(--color-text-light-6);
         background: var(--color-bg-btn);
     }
+    .traveler-manager .route-info.route-time {
+        color: var(--color-text-light-3);
+    }
     .tooltip.traveler-tooltip {
         max-width: 320px;
     }
@@ -219,9 +222,14 @@
                             <i class="fa-solid fa-sword"></i> {{route.encounterCount}}
                         </span>
                         {{/if}}
-                        {{#if route.lengthLabel}}
-                        <span class="route-info" data-tooltip="{{route.lengthLabel}}" data-tooltip-direction="UP" data-tooltip-class="traveler-tooltip">
+                        {{#if route.distanceLabel}}
+                        <span class="route-info" data-tooltip="{{route.distanceLabel}}" data-tooltip-direction="UP">
                             <i class="fa-solid fa-ruler"></i>
+                        </span>
+                        {{/if}}
+                        {{#if route.timeLabel}}
+                        <span class="route-info route-time" data-tooltip="{{route.timeTooltip}}" data-tooltip-direction="UP" data-tooltip-class="traveler-tooltip">
+                            <i class="fa-solid fa-clock"></i>
                         </span>
                         {{/if}}
                     </div>
