@@ -29,6 +29,6 @@
     "@vitest/coverage-v8": "^4.1.8",
     "cross-env": "^10.1.0",
     "playwright": "^1.44.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
